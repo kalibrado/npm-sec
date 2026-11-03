@@ -5,11 +5,12 @@ import os
 from datetime import datetime, timezone
 
 from  config import APP_VERSION, EXPORT_DIR, INTERNAL_NETWORKS
+from services.trust import validate_proxy_host
 
 
 def get_blocklist_items(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        """SELECT type, value, reason, created_at, expires_at FROM blocklist
+        """SELECT type, value, reason, created_at, expires_at, host FROM blocklist
            WHERE expires_at IS NULL OR expires_at > datetime('now')
            ORDER BY type, value"""
     ).fetchall()
@@ -46,18 +47,38 @@ def _nginx_address(value: str) -> str:
 def render_nginx_blocklist(
     items: list[dict], trusted_items: list[dict] | None = None
 ) -> str:
-    """HTTP-context snippet, intentionally inert until explicitly included by NPM."""
-    blocked_addresses = []
-    blocked_countries = []
+    """Generate HTTP-context maps for global and exact-proxy-host policies.
+
+    IP/CIDR selection is performed by Nginx geo on the real client IP;
+    country selection needs the GeoIP2 country variable. Exact hostnames
+    are resolved via $host and never through a user-controlled header string
+    injected into a directive. Trusted IP/CIDRs override all deny policies.
+    """
+    global_addresses: set[str] = set()
+    global_countries: set[str] = set()
+    scoped_addresses: dict[str, set[str]] = {}
+    scoped_countries: dict[str, set[str]] = {}
+
     for item in items:
-        kind, value = item.get("type"), item.get("value")
+        kind = item.get("type")
+        value = item.get("value")
+        scope = validate_proxy_host(item.get("host") or "")
         if kind in {"ip", "cidr"}:
-            blocked_addresses.append(_nginx_address(value))
+            address = _nginx_address(value)
+            if scope:
+                scoped_addresses.setdefault(scope, set()).add(address)
+            else:
+                global_addresses.add(address)
         elif kind == "country":
             country = str(value or "").strip().upper()
             if len(country) != 2 or not country.isascii() or not country.isalpha():
                 raise ValueError("Invalid ISO country code in blocklist")
-            blocked_countries.append(country)
+            if scope:
+                scoped_countries.setdefault(scope, set()).add(country)
+            else:
+                global_countries.add(country)
+        else:
+            raise ValueError(f"Invalid blocklist type: {kind}")
 
     trusted_addresses = [str(network) for network in INTERNAL_NETWORKS]
     for entry in trusted_items or []:
@@ -69,34 +90,70 @@ def render_nginx_blocklist(
         f"# version={APP_VERSION}",
         "geo $npm_security_blocked_ip {",
         "    default 0;",
-        *[f"    {address} 1;" for address in sorted(set(blocked_addresses))],
+        *[f"    {address} 1;" for address in sorted(global_addresses)],
         "}",
         "geo $npm_security_trusted_ip {",
         "    default 0;",
         *[f"    {address} 1;" for address in sorted(set(trusted_addresses))],
         "}",
     ]
-    if blocked_countries:
-        # GeoIP2 must be loaded and geoip2_data_country_code defined in NPM.
+
+    # A separate geo variable is required for every host with IP/CIDR
+    # rules. Nginx map values may reference these computed geo variables.
+    # This retains CIDR semantics without regex parsing remote addresses.
+    scoped_vars = []
+    for index, (host, addresses) in enumerate(sorted(scoped_addresses.items()), 1):
+        variable = f"$npm_security_scoped_ip_{index}"
+        lines.extend([
+            f"geo {variable} {{",
+            "    default 0;",
+            *[f"    {address} 1;" for address in sorted(addresses)],
+            "}",
+        ])
+        scoped_vars.append((host, variable))
+
+    lines.extend([
+        "map $host $npm_security_host_ip_blocked {",
+        "    default 0;",
+        *[f"    {host} {variable};" for host, variable in scoped_vars],
+        "}",
+    ])
+
+    if global_countries or scoped_countries:
+        # This variable must be supplied via ngx_http_geoip2_module.
         lines.extend([
             "map $geoip2_data_country_code $npm_security_blocked_country {",
             "    default 0;",
-            *[f"    {code} 1;" for code in sorted(set(blocked_countries))],
+            *[f"    {country} 1;" for country in sorted(global_countries)],
+            "}",
+            'map "$host:$geoip2_data_country_code" $npm_security_host_country_blocked {',
+            "    default 0;",
+            *[
+                f'    "{host}:{country}" 1;'
+                for host, countries in sorted(scoped_countries.items())
+                for country in sorted(countries)
+            ],
             "}",
         ])
     else:
-        # No GeoIP2 dependency when country blocking is unused.
+        # Avoid requiring a GeoIP2 installation when no country rule exists.
         lines.extend([
             "map $host $npm_security_blocked_country {",
             "    default 0;",
             "}",
+            "map $host $npm_security_host_country_blocked {",
+            "    default 0;",
+            "}",
         ])
+
     lines.extend([
-        'map "$npm_security_trusted_ip:$npm_security_blocked_ip:$npm_security_blocked_country" $npm_security_deny {',
+        'map "$npm_security_blocked_ip:$npm_security_blocked_country:$npm_security_host_ip_blocked:$npm_security_host_country_blocked" $npm_security_any_block {',
         "    default 0;",
-        '    "0:1:0" 1;',
-        '    "0:1:1" 1;',
-        '    "0:0:1" 1;',
+        "    ~1 1;",
+        "}",
+        'map "$npm_security_trusted_ip:$npm_security_any_block" $npm_security_deny {',
+        "    default 0;",
+        '    "0:1" 1;',
         "}",
         "",
     ])

@@ -10,6 +10,48 @@ aux fichiers précédents si une étape échoue.
 **L'enregistrement d'une IP ou d'un pays dans le dashboard ne déclenche pas automatiquement
 un blocage Nginx** sans ce mécanisme d'application et ses includes NPM.
 
+## Règles globales et règles par domaine
+
+Une règle de blocage peut porter sur tous les proxy hosts (champ `host` vide)
+ou viser **un nom de domaine exact** tel que `cloud.kaliorbis.fr`.
+
+Depuis l'API admin `POST /blocklist`, envoyer par exemple :
+
+```json
+{
+  "type": "country",
+  "value": "CN",
+  "host": "cloud.kaliorbis.fr",
+  "duration_minutes": 1440,
+  "reason": "Blocage ciblé Nextcloud"
+}
+```
+
+Le même code pays peut être utilisé sur plusieurs domaines distincts et en
+parallèle sur la portée globale. `GET /blocklist` liste toutes les règles ;
+`GET /blocklist?host=cloud.kaliorbis.fr` filtre le domaine exact ;
+`GET /blocklist?host=` montre uniquement les règles globales.
+
+La configuration exportée utilise :
+- des directives `geo` dédiées à chaque domaine pour les IP et CIDR ;
+- des directives `map` sur `$host` pour choisir la règle de ce domaine ;
+- un `map` sur `$host:$geoip2_data_country_code` pour les pays ciblés ;
+- la même priorité des exceptions IP/CIDR de confiance sur tous les domaines.
+
+Un blocage global et un blocage ciblé se cumulent. La portée **n'est pas
+une exception à un blocage global**. Les domaines wildcard, les URLs avec
+schéma, les ports et les syntaxes Nginx sont refusés. Le champ doit être un
+nom DNS exact ASCII, en punycode pour les domaines internationalisés.
+
+Les règles sont associées à la variable Nginx `$host`. Confirmer que les
+`server_name` de NPM correspondent à ces domaines et que l'IP cliente
+réelle est résolue à partir de proxies de confiance. Pour les domaines
+derrière un CDN, une configuration `real_ip_header` non maîtrisée peut
+fausser les décisions, voire autoriser une usurpation.
+
+**Le dashboard écrit uniquement les exports.** Une règle en attente ne
+s'applique qu'après le contrôle et le rechargement Nginx décrits ci-dessous.
+
 ## Préparation initiale sur l'hôte NPM
 
 Les points d'inclusion officiels NPM sont :

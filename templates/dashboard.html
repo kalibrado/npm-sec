@@ -310,6 +310,7 @@
 </div>
 <div class="inline-form">
 <input class="search" id="lists-block-input" placeholder="IP, CIDR ou pays (CN)"/>
+<input class="search" id="lists-block-host" placeholder="Domaine (facultatif, ex. cloud.kaliorbis.fr)" aria-label="Domaine concerné, vide pour une règle globale"/>
 <input class="search" id="lists-block-reason" placeholder="Raison"/>
 <select class="search" id="lists-block-duration" aria-label="Durée du blocage">
 <option value="">Permanent</option>
@@ -327,6 +328,7 @@
 <tr>
 <th>Type</th>
 <th>Valeur</th>
+<th>Portée</th>
 <th>Raison</th>
 <th>Expiration</th>
 <th>Date</th>
@@ -727,6 +729,7 @@
 <div class="sheet-body">
 <div class="bl-form">
 <input class="search" id="bl-input" placeholder="IP, CIDR ou code pays (CN, 1.2.3.4, 10.0.0.0/8)"/>
+<input class="search" id="bl-host" placeholder="Domaine (vide = tous les domaines)" style="margin-top:8px" aria-label="Domaine cible facultatif"/>
 <input class="search" id="bl-reason" placeholder="Raison (optionnel)" style="margin-top:8px"/>
 <button class="apply-btn" id="bl-add" style="margin-top:8px">+ Ajouter à la blocklist</button>
 </div>

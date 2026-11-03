@@ -108,7 +108,12 @@ def ip_profile(ip: str):
             "SELECT id,timestamp,host,method,uri,status,blocked,threat FROM access_logs WHERE ip=? ORDER BY id DESC LIMIT 30",
             [ip],
         ).fetchall()
-        is_blocked = conn.execute("SELECT 1 FROM blocklist WHERE type='ip' AND value=? LIMIT 1", [ip]).fetchone() is not None
+        is_blocked = conn.execute(
+            """SELECT 1 FROM blocklist
+               WHERE type='ip' AND value=? AND host=''
+                 AND (expires_at IS NULL OR expires_at > datetime('now'))
+               LIMIT 1""", [ip]
+        ).fetchone() is not None
         is_trusted = is_trusted_event({"ip": ip, "country_code": summary["country_code"] or "", "ua": ""}, conn)
     threat_list = []
     for t in threats:

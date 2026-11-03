@@ -130,7 +130,7 @@ def security_control_suspects(
         ).fetchall()
         blocked_rules = conn.execute(
             """SELECT id, type, value FROM blocklist
-               WHERE type IN ('ip','cidr')
+               WHERE host='' AND type IN ('ip','cidr')
                  AND (expires_at IS NULL OR expires_at > datetime('now'))"""
         ).fetchall()
         trusted_rules = conn.execute(

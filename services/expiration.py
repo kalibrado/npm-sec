@@ -11,7 +11,7 @@ from services.export import (
 def expire_block_rules() -> int:
     with get_db() as conn:
         expired = conn.execute(
-            """SELECT id, type, value FROM blocklist
+            """SELECT id, type, value, host FROM blocklist
                WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"""
         ).fetchall()
         if not expired:
@@ -19,7 +19,8 @@ def expire_block_rules() -> int:
         for row in expired:
             conn.execute("DELETE FROM blocklist WHERE id=?", [row["id"]])
             record_ban_event(
-                conn, row["value"], row["type"], "expire", "Temporary block expired"
+                conn, row["value"], row["type"], "expire",
+                f"host={row['host'] or '*'}: Temporary block expired"
             )
         # Generate from the updated transaction. Failure rolls back the rows,
         # allowing the next scheduler tick to retry rather than leave stale state.

@@ -66,9 +66,43 @@ def init_db():
                 value      TEXT NOT NULL,
                 reason     TEXT DEFAULT '',
                 created_at TEXT DEFAULT (datetime('now')),
-                UNIQUE(type, value)
+                expires_at TEXT,
+                host       TEXT NOT NULL DEFAULT '',
+                UNIQUE(type, value, host)
             )
         """
+        )
+        # Older databases had a global-only uniqueness constraint.
+        # SQLite cannot change a UNIQUE constraint in place, so recreate
+        # only this small table while preserving IDs, audit history and expiry.
+        # The entire migration is committed atomically with init_db().
+        block_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(blocklist)")
+        }
+        if "host" not in block_columns:
+            conn.execute(
+                """CREATE TABLE blocklist_host_scoped (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    reason TEXT DEFAULT '',
+                    created_at TEXT DEFAULT (datetime('now')),
+                    expires_at TEXT,
+                    host TEXT NOT NULL DEFAULT '',
+                    UNIQUE(type, value, host)
+                )"""
+            )
+            expiry_expr = "expires_at" if "expires_at" in block_columns else "NULL"
+            conn.execute(
+                f"""INSERT INTO blocklist_host_scoped
+                    (id, type, value, reason, created_at, expires_at, host)
+                    SELECT id, type, value, reason, created_at, {expiry_expr}, ''
+                    FROM blocklist"""
+            )
+            conn.execute("DROP TABLE blocklist")
+            conn.execute("ALTER TABLE blocklist_host_scoped RENAME TO blocklist")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_blocklist_host ON blocklist(host)"
         )
         # Existing installations receive a nullable expiration column.
         block_columns = {

@@ -9,7 +9,7 @@ from  schemas import BlockEntry, TrustedEntry
 from  services.auto_ban import record_ban_event
 from  services.export import get_blocklist_items, get_trusted_items, render_blocklist_json, render_nginx_blocklist, write_blocklist_exports
 from  services.nginx import reload_nginx_if_enabled
-from  services.trust import assert_safe_manual_block, validate_country_code, validate_ip_or_cidr, validate_trusted_type
+from  services.trust import assert_safe_manual_block, validate_country_code, validate_ip_or_cidr, validate_proxy_host, validate_trusted_type
 
 router = APIRouter(tags=["blocklist"])
 
@@ -68,11 +68,22 @@ def blocklist_deployment():
 
 
 @router.get("/blocklist", dependencies=[Depends(require_admin)])
-def list_blocklist():
+def list_blocklist(host: str | None = None):
     with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM blocklist WHERE expires_at IS NULL OR expires_at > datetime('now') ORDER BY created_at DESC"
-        ).fetchall()
+        if host is None:
+            rows = conn.execute(
+                """SELECT * FROM blocklist
+                   WHERE expires_at IS NULL OR expires_at > datetime('now')
+                   ORDER BY created_at DESC"""
+            ).fetchall()
+        else:
+            scope = validate_proxy_host(host)
+            rows = conn.execute(
+                """SELECT * FROM blocklist
+                   WHERE host=? AND (expires_at IS NULL OR expires_at > datetime('now'))
+                   ORDER BY created_at DESC""",
+                [scope],
+            ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -89,21 +100,25 @@ def add_to_blocklist(entry: BlockEntry):
         raise HTTPException(status_code=400, detail="Invalid blocklist type")
 
     expiration = _expires_at(entry.duration_minutes)
+    scope = validate_proxy_host(entry.host)
     try:
         with get_db() as conn:
             assert_safe_manual_block(entry_type, value, conn)
             conn.execute(
-                """INSERT INTO blocklist (type, value, reason, expires_at)
-                   VALUES (?, ?, ?, ?)
-                   ON CONFLICT(type, value) DO UPDATE SET
+                """INSERT INTO blocklist (type, value, reason, expires_at, host)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(type, value, host) DO UPDATE SET
                      reason=excluded.reason, expires_at=excluded.expires_at,
                      created_at=datetime('now')""",
-                [entry_type, value, (entry.reason or "")[:255], expiration],
+                [entry_type, value, (entry.reason or "")[:255], expiration, scope],
             )
-            record_ban_event(conn, value, entry_type, "block", entry.reason or "Manual blocklist add")
+            record_ban_event(
+                conn, value, entry_type, "block",
+                f"host={scope or '*'}: {entry.reason or 'Manual blocklist add'}",
+            )
             export_info = _sync_exports(conn)
             conn.commit()
-        return {"status": "ok", "type": entry_type, "value": value, "pending_apply": True}
+        return {"status": "ok", "type": entry_type, "value": value, "host": scope, "pending_apply": True}
     except HTTPException:
         raise
     except Exception as exc:
@@ -113,35 +128,43 @@ def add_to_blocklist(entry: BlockEntry):
 @router.delete("/blocklist/{entry_id}", dependencies=[Depends(require_admin)])
 def remove_from_blocklist(entry_id: int):
     with get_db() as conn:
-        row = conn.execute("SELECT type, value FROM blocklist WHERE id = ?", [entry_id]).fetchone()
+        row = conn.execute("SELECT type, value, host FROM blocklist WHERE id = ?", [entry_id]).fetchone()
         conn.execute("DELETE FROM blocklist WHERE id = ?", [entry_id])
         if row:
-            record_ban_event(conn, row["value"], row["type"], "unblock", "Manual remove via dashboard")
+            record_ban_event(
+                conn, row["value"], row["type"], "unblock",
+                f"host={row['host'] or '*'}: Manual remove via dashboard",
+            )
         export_info = _sync_exports(conn)
         conn.commit()
     return {"status": "deleted", "id": entry_id, "pending_apply": True}
 
 
 @router.post("/block_ip/{ip}", dependencies=[Depends(require_admin)])
-def block_ip(ip: str, duration_minutes: int | None = Query(default=None, ge=1, le=43200)):
+def block_ip(
+    ip: str,
+    duration_minutes: int | None = Query(default=None, ge=1, le=43200),
+    host: str | None = None,
+):
     ip = validate_ip_or_cidr(ip)
     expiration = _expires_at(duration_minutes)
+    scope = validate_proxy_host(host)
     try:
         with get_db() as conn:
             assert_safe_manual_block("ip", ip, conn)
             reason = "Manual block via dashboard"
             conn.execute(
-                """INSERT INTO blocklist (type, value, reason, expires_at)
-                   VALUES ('ip', ?, ?, ?)
-                   ON CONFLICT(type, value) DO UPDATE SET
+                """INSERT INTO blocklist (type, value, reason, expires_at, host)
+                   VALUES ('ip', ?, ?, ?, ?)
+                   ON CONFLICT(type, value, host) DO UPDATE SET
                      reason=excluded.reason, expires_at=excluded.expires_at,
                      created_at=datetime('now')""",
-                [ip, reason, expiration],
+                [ip, reason, expiration, scope],
             )
-            record_ban_event(conn, ip, "ip", "block", reason)
+            record_ban_event(conn, ip, "ip", "block", f"host={scope or '*'}: {reason}")
             export_info = _sync_exports(conn)
             conn.commit()
-        return {"status": "blocked", "ip": ip, "pending_apply": True}
+        return {"status": "blocked", "ip": ip, "host": scope, "pending_apply": True}
     except HTTPException:
         raise
     except Exception as exc:
@@ -149,25 +172,30 @@ def block_ip(ip: str, duration_minutes: int | None = Query(default=None, ge=1, l
 
 
 @router.post("/block_country/{cc}", dependencies=[Depends(require_admin)])
-def block_country(cc: str, duration_minutes: int | None = Query(default=None, ge=1, le=43200)):
+def block_country(
+    cc: str,
+    duration_minutes: int | None = Query(default=None, ge=1, le=43200),
+    host: str | None = None,
+):
     cc = validate_country_code(cc)
     expiration = _expires_at(duration_minutes)
+    scope = validate_proxy_host(host)
     try:
         with get_db() as conn:
             reason = "Mass block via dashboard"
             conn.execute(
-                """INSERT INTO blocklist (type, value, reason, expires_at)
-                   VALUES ('country', ?, ?, ?)
-                   ON CONFLICT(type, value) DO UPDATE SET
+                """INSERT INTO blocklist (type, value, reason, expires_at, host)
+                   VALUES ('country', ?, ?, ?, ?)
+                   ON CONFLICT(type, value, host) DO UPDATE SET
                      reason=excluded.reason, expires_at=excluded.expires_at,
                      created_at=datetime('now')""",
-                [cc, reason, expiration],
+                [cc, reason, expiration, scope],
             )
-            record_ban_event(conn, cc, "country", "block", reason)
+            record_ban_event(conn, cc, "country", "block", f"host={scope or '*'}: {reason}")
             export_info = _sync_exports(conn)
             conn.commit()
         # Optionally trigger nginx reload here via subprocess
-        return {"status": "blocked", "country": cc, "pending_apply": True}
+        return {"status": "blocked", "country": cc, "host": scope, "pending_apply": True}
     except HTTPException:
         raise
     except Exception as exc:

@@ -1,4 +1,5 @@
 import ipaddress
+import re
 import sqlite3
 from fastapi import HTTPException
 
@@ -37,6 +38,33 @@ def validate_trusted_type(entry_type: str, value: str) -> tuple[str, str]:
             raise HTTPException(status_code=400, detail="Invalid user-agent rule")
         return entry_type, value.lower()
     raise HTTPException(status_code=400, detail="Invalid trusted entry type")
+
+
+_HOST_LABEL_PATTERN = re.compile(
+    r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
+
+
+def validate_proxy_host(value: str | None) -> str:
+    """Canonical exact NPM host, or empty string for a global block.
+
+    Forbid wildcard, URL, port and Nginx special syntax to avoid
+    configuration injection. IDNs should be passed in punycode form.
+    """
+    if value is None or value == "":
+        return ""
+    if not isinstance(value, str):
+        raise HTTPException(status_code=422, detail="Invalid proxy host")
+    host = value.strip().lower().rstrip(".")
+    if (
+        not host or len(host) > 253 or not host.isascii()
+        or any(not _HOST_LABEL_PATTERN.fullmatch(x) for x in host.split("."))
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid proxy host: use an exact DNS name without scheme, port or wildcard",
+        )
+    return host
 
 
 def assert_safe_manual_block(
@@ -127,7 +155,7 @@ def is_already_blocked(conn: sqlite3.Connection, ip: str) -> bool:
     if not ip:
         return False
     row = conn.execute(
-        "SELECT 1 FROM blocklist WHERE type='ip' AND value=? "
+        "SELECT 1 FROM blocklist WHERE type='ip' AND host='' AND value=? "
         "AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1",
         [ip],
     ).fetchone()
