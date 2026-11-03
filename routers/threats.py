@@ -175,7 +175,7 @@ def brute_force_by_host(window_min: int = None, threshold: int = None, limit: in
                    MAX(country_code) as country_code,
                    MAX(isp) as isp
             FROM access_logs
-            WHERE timestamp > datetime('now', ?)
+            WHERE datetime(timestamp) > datetime('now', ?)
               AND (uri LIKE ? OR uri LIKE ? OR uri LIKE ? OR uri LIKE ? OR uri LIKE ? OR uri LIKE ?)
             GROUP BY host, ip
             HAVING attempts >= ? OR denied >= ?
