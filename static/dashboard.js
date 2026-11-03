@@ -1529,9 +1529,66 @@ async function fetchJsonSafe(url) {
   return r.json();
 }
 
+async function loadSecurityControlOverview() {
+  const root = document.getElementById('security-control-overview');
+  if (!root) return;
+  const put = (id, value) => {
+    const target = document.getElementById(id);
+    if (target) target.textContent = String(value);
+  };
+  const pretty = value => Number(value || 0).toLocaleString('fr-FR');
+  const state = document.getElementById('control-policy-state');
+  const alert = document.getElementById('control-policy-message');
+
+  try {
+    const overview = await fetchJsonSafe('/security-control/overview?hours=24');
+    const policy = overview.policy || {};
+    const byType = overview.rules?.by_type || {};
+    const mode = overview.auto_ban_mode || 'off';
+    const deploymentState = policy.state || 'not_configured';
+    const labels = {
+      applied: 'Dernière application confirmée',
+      pending: 'Application en attente',
+      not_configured: 'NPM non configuré'
+    };
+    if (state) {
+      state.textContent = labels[deploymentState] || 'État inconnu';
+      state.dataset.state = deploymentState;
+    }
+    if (alert) {
+      alert.dataset.state = deploymentState;
+      alert.textContent = deploymentState === 'applied'
+        ? 'La configuration exportée correspond à la dernière validation et recharge Nginx enregistrée. Cela ne remplace pas une vérification en direct du proxy.'
+        : deploymentState === 'pending'
+          ? 'Les règles sont enregistrées, mais leur application dans NPM n’est pas confirmée. Vérifie nginx -t puis applique le rechargement depuis l’hôte.'
+          : 'Aucun déploiement de règles confirmé. Configure les includes NPM avant de considérer ces blocages comme effectifs.';
+    }
+
+    put('control-active-rules', pretty(overview.rules?.active_total));
+    put('control-rules-breakdown', `${pretty(byType.ip)} IP · ${pretty(byType.cidr)} réseaux · ${pretty(byType.country)} pays`);
+    put('control-trusted-count', pretty(overview.rules?.trusted_total));
+    put('control-proxy-blocked', pretty(overview.traffic?.proxy_blocked));
+    put('control-threat-signals', pretty(overview.detections?.signals));
+    put('control-threat-breakdown', `${pretty(overview.detections?.brute_force)} brute force · ${pretty(overview.detections?.http_scans)} scans HTTP`);
+    const modes = { off: 'Désactivé', simulation: 'Simulation', active: 'Activé' };
+    put('control-auto-ban-mode', `Auto-ban : ${modes[mode] || 'Inconnu'}`);
+    put('control-traffic-count', `Trafic 24 h : ${pretty(overview.traffic?.requests)} requêtes · ${pretty(overview.traffic?.unique_ips)} IP`);
+  } catch (err) {
+    if (state) {
+      state.textContent = 'Indisponible';
+      state.dataset.state = 'error';
+    }
+    if (alert) {
+      alert.textContent = 'Impossible de vérifier les règles Nginx. Aucun état « appliqué » ne peut être confirmé.';
+      alert.dataset.state = 'error';
+    }
+  }
+}
+
 async function loadSecurityLists() {
   if (securityListsLoading) return;
   securityListsLoading = true;
+  void loadSecurityControlOverview();
   const blockedBody = document.getElementById('lists-blocked-body');
   const trustedBody = document.getElementById('lists-trusted-body');
   const historyBody = document.getElementById('lists-history-body');
@@ -1560,7 +1617,7 @@ async function loadSecurityLists() {
         <td class="time-cell">${item.expires_at ? fmtDateTime(item.expires_at) : 'Permanent'}</td>
         <td class="time-cell">${fmtDateTime(item.created_at)}</td>
         <td><button class="list-action-btn" onclick="removeBlock(${Number(item.id)})">Supprimer</button></td>
-      </tr>`).join('') : emptyRow(5, '🧘', 'Aucune entrée bloquée');
+      </tr>`).join('') : emptyRow(6, '🧘', 'Aucune entrée bloquée');
 
     trustedBody.innerHTML = trusted.length ? trusted.map(item => `
       <tr>
