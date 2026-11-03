@@ -254,6 +254,14 @@
 <div class="inline-form">
 <input class="search" id="lists-block-input" placeholder="IP, CIDR ou pays (CN)"/>
 <input class="search" id="lists-block-reason" placeholder="Raison"/>
+<select class="search" id="lists-block-duration" aria-label="Durée du blocage">
+<option value="">Permanent</option>
+<option value="15">15 minutes</option>
+<option value="60">1 heure</option>
+<option value="1440">24 heures</option>
+<option value="10080">7 jours</option>
+<option value="43200">30 jours</option>
+</select>
 <button class="apply-btn compact" id="lists-block-add">+ Bloquer</button>
 </div>
 <div class="list-table-wrap">
@@ -263,6 +271,7 @@
 <th>Type</th>
 <th>Valeur</th>
 <th>Raison</th>
+<th>Expiration</th>
 <th>Date</th>
 <th></th>
 </tr>
