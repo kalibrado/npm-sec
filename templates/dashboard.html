@@ -408,6 +408,7 @@
 <button class="chip active" data-list-tab="all">Tous</button>
 <button class="chip danger-chip" data-list-tab="blocked">Blocked</button>
 <button class="chip success-chip" data-list-tab="trusted">Trusted</button>
+<button class="chip" data-list-tab="rules">Règles HTTP</button>
 <button class="chip" data-list-tab="history">Historique</button>
 </div>
 <button class="page-btn" id="lists-refresh">Rafraîchir</button>
@@ -481,6 +482,71 @@
 <tbody id="lists-trusted-body"></tbody>
 </table>
 </div>
+</section>
+<section class="list-card nsd-http-rules" data-list-section="rules">
+  <div class="list-card-head">
+    <div>
+      <div class="side-title">Règles HTTP avancées</div>
+      <div class="list-subtitle">Chemin, User-Agent, méthode. Priorité par type, durée et portée par domaine. Les modifications restent en attente d'application.</div>
+    </div>
+    <span class="list-count" id="nsd-rules-count">0</span>
+  </div>
+  <form id="nsd-rule-form" class="nsd-rules-form" novalidate>
+    <input type="hidden" id="nsd-rule-id"/>
+    <input type="hidden" id="nsd-rule-version"/>
+    <label>Type
+      <select class="search" id="nsd-rule-kind">
+        <option value="path">Chemin (préfixe)</option>
+        <option value="ua">User-Agent (mot littéral)</option>
+        <option value="method">Méthode HTTP</option>
+      </select>
+    </label>
+    <label>Valeur
+      <input class="search" id="nsd-rule-value" placeholder="/admin ou sqlmap ou DELETE"/>
+    </label>
+    <label>Domaine (facultatif)
+      <input class="search" id="nsd-rule-host" placeholder="Global si vide"/>
+    </label>
+    <label>Priorité (1–1000)
+      <input class="search" id="nsd-rule-priority" type="number" min="1" max="1000" value="100"/>
+    </label>
+    <label>Durée (à partir de l'enregistrement)
+      <select class="search" id="nsd-rule-duration">
+        <option value="">Permanent / conserver lors d'une édition</option>
+        <option value="0">Devenir permanent</option>
+        <option value="15">15 minutes</option>
+        <option value="60">1 heure</option>
+        <option value="1440">24 heures</option>
+        <option value="10080">7 jours</option>
+        <option value="43200">30 jours</option>
+      </select>
+    </label>
+    <label>Motif
+      <input class="search" id="nsd-rule-reason" maxlength="255" placeholder="Pourquoi bloquer cette requête ?"/>
+    </label>
+    <label class="nsd-rule-active">
+      <input type="checkbox" id="nsd-rule-enabled" checked/>
+      Règle active
+    </label>
+    <div class="nsd-rule-actions">
+      <button type="submit" class="apply-btn compact" id="nsd-rule-save">Ajouter une règle</button>
+      <button type="button" class="page-btn" id="nsd-rule-cancel">Annuler édition</button>
+    </div>
+  </form>
+  <div id="nsd-rule-feedback" class="security-inline-feedback" role="status" aria-live="polite"></div>
+  <div class="list-table-wrap">
+    <table class="compact-table">
+      <thead><tr>
+        <th>Type</th><th>Valeur</th><th>Domaine</th><th>Priorité</th>
+        <th>État</th><th>Expiration</th><th>Correspondances</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="nsd-rules-body"></tbody>
+    </table>
+  </div>
+  <details class="nsd-rule-audit">
+    <summary>Historique d'édition des règles HTTP</summary>
+    <div id="nsd-rule-audit">Aucune modification.</div>
+  </details>
 </section>
 <section class="list-card" data-list-section="history">
 <div class="list-card-head">
