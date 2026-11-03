@@ -156,6 +156,23 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Politiques de blocage par domaine
+
+Les règles de blocage IP, CIDR et pays peuvent désormais cibler un proxy host
+précis (`host`) ou rester globales lorsque ce champ est vide. La migration
+SQLite conserve les anciennes règles comme globales, ainsi que leurs dates
+d'expiration. Les formulaires « Listes » et « Block List Manager » proposent
+un champ domaine facultatif et affichent la portée de chaque règle.
+
+Le rendu Nginx utilise `geo` et `map` pour isoler les IP/CIDR par host
+et `$geoip2_data_country_code` pour le géoblocage mondial ou par host.
+Les exceptions IP/CIDR restent prioritaires. Une règle globale continue
+à s'appliquer à tous les proxy hosts, même si des règles ciblées existent.
+
+Documentation et précautions : [Politiques NPM](docs/NPM_POLICY_ENFORCEMENT.md).
+La suite CI inclut la vérification de la syntaxe des snippets via `nginx -t`
+sur une configuration de test.
+
 ## Garde-fous des blocages manuels
 
 Les endpoints `POST /blocklist` et `POST /block_ip/{ip}` refusent désormais
