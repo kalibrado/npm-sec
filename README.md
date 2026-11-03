@@ -175,6 +175,24 @@ blocage. Les éventuelles divergences dues à GeoIP2, au proxy amont ou
 aux règles déployées hors du dashboard doivent être vérifiées en
 conditions réelles.
 
+## Vérification réelle des décisions Nginx en CI
+
+En plus de `nginx -t`, la suite de tests lance maintenant un **Nginx local
+jetable** sur `127.0.0.1` et exécute des requêtes HTTP réelles. Elle vérifie
+la réponse `403` ou `204` sur différents domaines pour les politiques
+IP/CIDR/pays globales et ciblées, ainsi que les exemptions IP/CIDR et les
+réseaux d'administration.
+
+La configuration de test simule la géolocalisation avec une variable
+Nginx alimentée depuis un header strictement réservé au test. Elle ne
+charge **pas** MaxMind et ne s'applique à **aucun proxy de production**.
+Pour tester GeoIP2 et la chaîne de proxies réels, utiliser un environnement
+de recette avec le module et la base MMDB de NPM.
+
+Les tests nécessitent `nginx` et sont exécutés sur GitHub Actions. Ils
+sont ignorés uniquement sur les postes de développement dépourvus du
+binaire Nginx.
+
 ## Politiques de blocage par domaine
 
 Les règles de blocage IP, CIDR et pays peuvent désormais cibler un proxy host
