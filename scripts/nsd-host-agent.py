@@ -240,6 +240,8 @@ def rollback(docker, folder, manifest):
     existed = manifest.get("existed")
     if type(existed) is not dict or set(existed) != set(SNIPPETS):
         raise RuntimeError("Manifest de sauvegarde invalide")
+    # Revalidate confinement on recovery, not only on initial application.
+    docker.assert_safe_paths()
     # Restore originals first. Only remove newly-created files after original
     # native hooks have been restored, so no active include is left dangling.
     order = list(HOOKS) + list(FILENAMES)
