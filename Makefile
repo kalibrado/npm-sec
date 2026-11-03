@@ -23,7 +23,8 @@ help:
 init:
 	@test -f .env || cp .env.example .env
 	@mkdir -p data/exports data/backups
-	@chmod 750 data data/exports data/backups
+	@chmod 770 data data/exports data/backups
+	@chown -R 10001:0 data 2>/dev/null || echo "⚠️  Prépare les permissions Docker : sudo chown -R 10001:0 data"
 	@echo "✅ Init OK. Edite .env avant make up."
 
 secrets:
