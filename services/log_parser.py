@@ -62,6 +62,8 @@ def parse_line(line: str) -> dict | None:
 def insert_log(event: dict) -> dict:
     event.setdefault('source_id', None)
     event.setdefault('source_offset', None)
+    event.setdefault('policy_mode', None)
+    event.setdefault('would_deny', None)
     with get_db() as conn:
         threat = analyze_threat(event, conn)
         event.update(threat)
