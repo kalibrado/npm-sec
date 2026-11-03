@@ -232,8 +232,8 @@ def save_settings(raw, expected_revision: int, author: str, note: str, restore_f
     values = normalize_settings(raw)
     if type(expected_revision) is not int or expected_revision < 0:
         raise HTTPException(status_code=422, detail="expected_revision invalide")
-    if not isinstance(note, str) or len(note) > 240:
-        raise HTTPException(status_code=422, detail="Note trop longue")
+    if not isinstance(note, str) or not 5 <= len(note.strip()) <= 240:
+        raise HTTPException(status_code=422, detail="Motif d'au moins 5 caractères requis (240 max)")
     with get_db() as conn:
         try:
             conn.execute("BEGIN IMMEDIATE")
