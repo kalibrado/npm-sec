@@ -259,6 +259,10 @@ def recover(docker, state_dir):
 def apply_job(docker, state_dir, job, bootstrap=False):
     job_id = validate_job(job)
     docker.check()
+    if bootstrap and not all(docker.exists(SNIPPETS[name]) for name in HOOKS):
+        raise RuntimeError(
+            "Bootstrap refusé : les deux fichiers NPM existants doivent être sauvegardables"
+        )
     if not bootstrap and not hooks_installed(docker):
         raise RuntimeError(
             "NPM n'est pas amorcé : démarrer explicitement l'agent avec --bootstrap"
@@ -392,7 +396,11 @@ def cli(argv=None):
         docker = DockerNPM(args.container)
         boot = args.bootstrap
         while True:
-            execute_once(client, docker, args.state_dir, bootstrap=boot)
+            processed = execute_once(client, docker, args.state_dir, bootstrap=boot)
+            if boot and not processed:
+                raise RuntimeError(
+                    "Aucune demande d'application en attente : bootstrap non exécuté"
+                )
             boot = False
             if not args.loop:
                 break
