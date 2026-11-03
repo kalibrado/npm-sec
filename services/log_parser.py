@@ -7,7 +7,7 @@ from  config import ALERT_THRESHOLD, AUTO_BAN_EXPORT_APPLY, AUTO_BAN_RELOAD, DB_
 from  database import get_db, invalidate_stats_cache
 from  services.auto_ban import maybe_auto_ban
 from  services.discord import send_discord_alert
-from  services.export import get_blocklist_items, write_blocklist_exports
+from  services.export import get_blocklist_items, get_trusted_items, write_blocklist_exports
 from  services.nginx import reload_nginx_if_enabled
 from  services.threat_engine import analyze_threat, classify_threat, threat_tags_for_event
 
@@ -96,7 +96,7 @@ def insert_log(event: dict) -> dict:
         if auto_banned and AUTO_BAN_EXPORT_APPLY:
             # Export after commit so the generated files see the new blocklist row.
             items = get_blocklist_items(conn)
-            write_blocklist_exports(items)
+            write_blocklist_exports(items, get_trusted_items(conn))
             if AUTO_BAN_RELOAD:
                 reload_nginx_if_enabled()
     invalidate_stats_cache()
