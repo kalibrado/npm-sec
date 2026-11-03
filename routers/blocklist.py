@@ -9,7 +9,7 @@ from  schemas import BlockEntry, TrustedEntry
 from  services.auto_ban import record_ban_event
 from  services.export import get_blocklist_items, get_trusted_items, render_blocklist_json, render_nginx_blocklist, write_blocklist_exports
 from  services.nginx import reload_nginx_if_enabled
-from  services.trust import validate_country_code, validate_ip_or_cidr, validate_trusted_type
+from  services.trust import assert_safe_manual_block, validate_country_code, validate_ip_or_cidr, validate_trusted_type
 
 router = APIRouter(tags=["blocklist"])
 
@@ -91,6 +91,7 @@ def add_to_blocklist(entry: BlockEntry):
     expiration = _expires_at(entry.duration_minutes)
     try:
         with get_db() as conn:
+            assert_safe_manual_block(entry_type, value, conn)
             conn.execute(
                 """INSERT INTO blocklist (type, value, reason, expires_at)
                    VALUES (?, ?, ?, ?)
@@ -103,8 +104,10 @@ def add_to_blocklist(entry: BlockEntry):
             export_info = _sync_exports(conn)
             conn.commit()
         return {"status": "ok", "type": entry_type, "value": value, "pending_apply": True}
-    except Exception as e:
-        return {"error": str(e)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to update blocklist") from exc
 
 
 @router.delete("/blocklist/{entry_id}", dependencies=[Depends(require_admin)])
@@ -116,14 +119,16 @@ def remove_from_blocklist(entry_id: int):
             record_ban_event(conn, row["value"], row["type"], "unblock", "Manual remove via dashboard")
         export_info = _sync_exports(conn)
         conn.commit()
-    return {"status": "deleted", "id": entry_id}
+    return {"status": "deleted", "id": entry_id, "pending_apply": True}
 
 
 @router.post("/block_ip/{ip}", dependencies=[Depends(require_admin)])
 def block_ip(ip: str, duration_minutes: int | None = Query(default=None, ge=1, le=43200)):
     ip = validate_ip_or_cidr(ip)
+    expiration = _expires_at(duration_minutes)
     try:
         with get_db() as conn:
+            assert_safe_manual_block("ip", ip, conn)
             reason = "Manual block via dashboard"
             conn.execute(
                 """INSERT INTO blocklist (type, value, reason, expires_at)
@@ -131,19 +136,22 @@ def block_ip(ip: str, duration_minutes: int | None = Query(default=None, ge=1, l
                    ON CONFLICT(type, value) DO UPDATE SET
                      reason=excluded.reason, expires_at=excluded.expires_at,
                      created_at=datetime('now')""",
-                [ip, reason, _expires_at(duration_minutes)],
+                [ip, reason, expiration],
             )
             record_ban_event(conn, ip, "ip", "block", reason)
             export_info = _sync_exports(conn)
             conn.commit()
         return {"status": "blocked", "ip": ip, "pending_apply": True}
-    except Exception as e:
-        return {"error": str(e)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to update blocklist") from exc
 
 
 @router.post("/block_country/{cc}", dependencies=[Depends(require_admin)])
 def block_country(cc: str, duration_minutes: int | None = Query(default=None, ge=1, le=43200)):
     cc = validate_country_code(cc)
+    expiration = _expires_at(duration_minutes)
     try:
         with get_db() as conn:
             reason = "Mass block via dashboard"
@@ -153,15 +161,17 @@ def block_country(cc: str, duration_minutes: int | None = Query(default=None, ge
                    ON CONFLICT(type, value) DO UPDATE SET
                      reason=excluded.reason, expires_at=excluded.expires_at,
                      created_at=datetime('now')""",
-                [cc, reason, _expires_at(duration_minutes)],
+                [cc, reason, expiration],
             )
             record_ban_event(conn, cc, "country", "block", reason)
             export_info = _sync_exports(conn)
             conn.commit()
         # Optionally trigger nginx reload here via subprocess
         return {"status": "blocked", "country": cc, "pending_apply": True}
-    except Exception as e:
-        return {"error": str(e)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to update blocklist") from exc
 
 
 @router.get("/ban-events", dependencies=[Depends(require_admin)])
