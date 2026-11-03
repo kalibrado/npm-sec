@@ -48,6 +48,7 @@ def get_profile():
         render_nginx_blocklist, render_nginx_server_guard,
     )
     from services.security_profiles import bundle_hash, render_profile
+    from services.security_rules import active_rules
     with get_db() as conn:
         latest = conn.execute(
             """SELECT id,revision,bundle_sha256,status,requested_at,completed_at,
@@ -56,7 +57,8 @@ def get_profile():
         ).fetchone()
         files = render_profile(values)
         files["npm-blocklist.conf"] = render_nginx_blocklist(
-            get_blocklist_items(conn), get_trusted_items(conn), get_policy_modes(conn)
+            get_blocklist_items(conn), get_trusted_items(conn), get_policy_modes(conn),
+            active_rules(conn),
         )
         files["npm-server-guard.conf"] = render_nginx_server_guard()
         current_hash = bundle_hash(files)
