@@ -21,6 +21,14 @@ AUTO_BAN_EXPORT_APPLY = os.getenv("AUTO_BAN_EXPORT_APPLY", "true").lower() in {"
 AUTO_BAN_RELOAD = os.getenv("AUTO_BAN_RELOAD", "false").lower() in {"1", "true", "yes", "on"}
 AUTO_BAN_DRY_RUN = os.getenv("AUTO_BAN_DRY_RUN", "true").lower() in {"1", "true", "yes", "on"}
 DISCORD_THREAT_ALERTS_ENABLED = os.getenv("DISCORD_THREAT_ALERTS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+# In-dashboard alerts for verified Nginx "would deny" log signals.
+# Discord delivery is deliberately opt-in and auto-ban is never triggered
+# by these observations.
+OBSERVE_ALERT_ENABLED = os.getenv("OBSERVE_ALERT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+OBSERVE_ALERT_DISCORD_ENABLED = os.getenv("OBSERVE_ALERT_DISCORD_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+OBSERVE_ALERT_THRESHOLD = max(1, int(os.getenv("OBSERVE_ALERT_THRESHOLD", "5")))
+OBSERVE_ALERT_WINDOW_MINUTES = max(1, int(os.getenv("OBSERVE_ALERT_WINDOW_MINUTES", "5")))
+OBSERVE_ALERT_COOLDOWN_MINUTES = max(1, int(os.getenv("OBSERVE_ALERT_COOLDOWN_MINUTES", "15")))
 WHOIS_CACHE_TTL_DAYS = int(os.getenv("WHOIS_CACHE_TTL_DAYS", "7"))
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
