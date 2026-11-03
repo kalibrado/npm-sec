@@ -2198,10 +2198,13 @@ async function loadSecurityLists() {
       </tr>`).join('') : emptyRow(5, '📭', 'Aucun événement');
 
     applyListTab(currentListTab);
+    return true;
   } catch (e) {
     blockedBody.innerHTML = emptyRow(7, '⚠️', 'Erreur de chargement des listes');
     trustedBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement des listes');
     historyBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement de l’historique');
+    toast(e.message || 'Impossible de charger les listes', 'danger');
+    return false;
   } finally {
     securityListsLoading = false;
   }
@@ -2423,7 +2426,7 @@ if (controlRefresh) controlRefresh.addEventListener('click', () => {
   void withBusyButton('security-control-refresh', 'Actualisation…', async () => {
     try {
       await loadSecurityControl();
-      toast('Centre de contrôle actualisé', 'success');
+      toast('Actualisation terminée : consulte les états des différentes sections.', 'info');
     } catch (err) {
       toast(err.message || 'Actualisation impossible', 'danger');
     }
@@ -2432,8 +2435,8 @@ if (controlRefresh) controlRefresh.addEventListener('click', () => {
 const listsRefresh = document.getElementById('lists-refresh');
 if (listsRefresh) listsRefresh.addEventListener('click', () => {
   void withBusyButton('lists-refresh', 'Actualisation…', async () => {
-    await loadSecurityLists();
-    toast('Listes et historique actualisés', 'info');
+    const ok = await loadSecurityLists();
+    if (ok) toast('Listes et historique actualisés', 'success');
   });
 });
 const listsBlockAdd = document.getElementById('lists-block-add');
