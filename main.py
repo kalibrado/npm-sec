@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from  config import ALLOWED_ORIGINS, validate_runtime_config
-from  routers import admin, auth, blocklist, health, logs, threats
+from  routers import admin, auth, blocklist, health, logs, threats, control
 from  database import init_db
 from  routers import widget
 from  scheduler import start_background_tasks
@@ -33,6 +33,7 @@ app.include_router(health.router)
 app.include_router(logs.router)
 app.include_router(threats.router)
 app.include_router(blocklist.router)
+app.include_router(control.router)
 app.include_router(admin.router)
 app.include_router(widget.router)
 
