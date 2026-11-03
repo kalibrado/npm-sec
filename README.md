@@ -84,6 +84,26 @@ BASE_URL=http://localhost:8000 ADMIN_TOKEN=<token> ./scripts/smoke-test.sh
 
 Le `ADMIN_TOKEN` reste accepté pour les scripts/API, même si l'UI utilise les sessions web.
 
+## Investigation des IP suspectes
+
+L'onglet « Listes de sécurité » présente désormais un classement des IP
+suspectes avec filtres de période (1 h, 24 h, 7 j) et de score minimal.
+L'API authentifiée `GET /security-control/suspects` expose le nombre de
+signaux, le score maximum, les détections de brute force/scans HTTP et le
+contexte de confiance ou de blocage **enregistré**.
+
+Depuis le tableau, un administrateur peut ouvrir une fiche IP, enregistrer
+un bannissement temporaire d'une heure, ajouter une IP de confiance ou
+retirer un blocage direct. Les actions exigent confirmation et sont
+journalisées via les API existantes. Une IP couverte uniquement par un CIDR
+doit être gérée dans la liste des règles ; supprimer un blocage direct ne
+supprime pas une interdiction CIDR plus large.
+
+**Important :** aucun score ne prouve à lui seul une attaque et
+l'enregistrement d'un bannissement ne signifie pas qu'il est déjà appliqué
+par Nginx Proxy Manager. Les réseaux internes et les IP explicitement
+de confiance ne proposent pas d'action de blocage depuis cette vue.
+
 ## Centre de contrôle de sécurité
 
 La page **Listes de sécurité** présente un aperçu vérifiable des dernières
