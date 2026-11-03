@@ -35,9 +35,9 @@ def maybe_auto_ban(event: dict, conn: sqlite3.Connection) -> bool:
         return False
 
     conn.execute(
-        """INSERT INTO blocklist (type, value, reason, expires_at)
-           VALUES ('ip', ?, ?, datetime('now', ?))
-           ON CONFLICT(type, value) DO UPDATE SET
+        """INSERT INTO blocklist (type, value, reason, expires_at, host)
+           VALUES ('ip', ?, ?, datetime('now', ?), '')
+           ON CONFLICT(type, value, host) DO UPDATE SET
              reason=excluded.reason,
              expires_at=excluded.expires_at,
              created_at=datetime('now')""",
