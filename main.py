@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from  config import ALLOWED_ORIGINS, validate_runtime_config
-from  routers import admin, auth, blocklist, health, logs, threats, control, security_profile, deployment
+from  routers import admin, auth, blocklist, health, logs, threats, control, security_profile, deployment, security_rules
 from  database import init_db
 from  routers import widget
 from  scheduler import start_background_tasks
@@ -22,7 +22,7 @@ app = FastAPI(title="NPM Security Dashboard")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type", "X-Admin-Token"],
     allow_credentials=True,
 )
@@ -36,6 +36,7 @@ app.include_router(blocklist.router)
 app.include_router(control.router)
 app.include_router(security_profile.router)
 app.include_router(deployment.router)
+app.include_router(security_rules.router)
 app.include_router(admin.router)
 app.include_router(widget.router)
 
