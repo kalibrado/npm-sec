@@ -159,7 +159,7 @@ async def cleanup_task():
         await asyncio.sleep(3600)
         with get_db() as conn:
             conn.execute(
-                "DELETE FROM access_logs WHERE timestamp < datetime('now', ?)",
+                "DELETE FROM access_logs WHERE datetime(timestamp) < datetime('now', ?)",
                 [f"-{DB_RETENTION_DAYS} days"],
             )
             conn.commit()
