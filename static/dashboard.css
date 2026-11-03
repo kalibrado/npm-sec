@@ -5240,3 +5240,16 @@ button[aria-busy="true"] {
   #panel-control .security-console-scroll > section { margin-left: 8px; margin-right: 8px; }
   .log-purge-feedback { width: 100%; }
 }
+
+/* Keep all desktop navigation tabs reachable on narrower laptop screens. */
+@media (min-width: 900px) {
+  .desktop-tabs {
+    min-width: 0;
+    max-width: min(100%, 720px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+  .desktop-tab { flex: 0 0 auto; }
+}
