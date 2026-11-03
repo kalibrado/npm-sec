@@ -1,0 +1,197 @@
+import contextlib
+import sqlite3
+
+from  config import DB_FILE, DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_USERNAME, ADMIN_TOKEN
+from  security import pbkdf2_password
+
+STATS_CACHE_TTL = 10.0
+_stats_cache: dict = {"data": None, "ts": 0.0}
+
+
+def invalidate_stats_cache():
+    _stats_cache["ts"] = 0.0
+
+
+def get_stats_cache():
+    return _stats_cache
+
+
+@contextlib.contextmanager
+def get_db():
+    conn = sqlite3.connect(DB_FILE, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def init_db():
+    with get_db() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS access_logs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp     TEXT NOT NULL,
+                ip            TEXT,
+                country_code  TEXT,
+                country_name  TEXT,
+                city          TEXT,
+                isp           TEXT,
+                method        TEXT,
+                referer       TEXT,
+                host          TEXT,
+                user_agent    TEXT,
+                asn           TEXT,
+                uri           TEXT,
+                status        INTEGER,
+                blocked       INTEGER DEFAULT 0,
+                ua            TEXT,
+                ua_type       TEXT,
+                latitude      REAL DEFAULT 0,
+                longitude     REAL DEFAULT 0,
+                threat        TEXT,
+                request_time  REAL DEFAULT 0
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS blocklist (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                type       TEXT NOT NULL,
+                value      TEXT NOT NULL,
+                reason     TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(type, value)
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS threat_events (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                access_log_id INTEGER,
+                ip            TEXT,
+                threat_type   TEXT NOT NULL,
+                score         INTEGER NOT NULL,
+                reasons       TEXT DEFAULT '[]',
+                created_at    TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(access_log_id) REFERENCES access_logs(id)
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ban_events (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                target     TEXT NOT NULL,
+                type       TEXT NOT NULL,
+                action     TEXT NOT NULL,
+                reason     TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trusted_entries (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                type       TEXT NOT NULL,
+                value      TEXT NOT NULL,
+                reason     TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(type, value)
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS whois_cache (
+                ip         TEXT PRIMARY KEY,
+                payload    TEXT NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS threat_tags (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                threat_event_id INTEGER,
+                tag             TEXT NOT NULL,
+                created_at      TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(threat_event_id) REFERENCES threat_events(id)
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                username      TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role          TEXT NOT NULL DEFAULT 'viewer',
+                enabled       INTEGER NOT NULL DEFAULT 1,
+                created_at    TEXT DEFAULT (datetime('now')),
+                last_login    TEXT
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sessions (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                created_at  TEXT DEFAULT (datetime('now')),
+                expires_at  TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """
+        )
+        for idx in [
+            "CREATE INDEX IF NOT EXISTS idx_timestamp  ON access_logs(timestamp DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_id         ON access_logs(id DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_blocked    ON access_logs(blocked)",
+            "CREATE INDEX IF NOT EXISTS idx_host       ON access_logs(host)",
+            "CREATE INDEX IF NOT EXISTS idx_status     ON access_logs(status)",
+            "CREATE INDEX IF NOT EXISTS idx_country    ON access_logs(country_code)",
+            "CREATE INDEX IF NOT EXISTS idx_ip         ON access_logs(ip)",
+            "CREATE INDEX IF NOT EXISTS idx_uri        ON access_logs(uri)",
+            "CREATE INDEX IF NOT EXISTS idx_threat_ip  ON threat_events(ip)",
+            "CREATE INDEX IF NOT EXISTS idx_threat_ts  ON threat_events(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_threat_score ON threat_events(score DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_ban_events_target ON ban_events(target)",
+            "CREATE INDEX IF NOT EXISTS idx_ban_events_ts ON ban_events(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_trusted_type_value ON trusted_entries(type, value)",
+            "CREATE INDEX IF NOT EXISTS idx_whois_cache_updated ON whois_cache(updated_at)",
+            "CREATE INDEX IF NOT EXISTS idx_access_logs_asn ON access_logs(asn)",
+            "CREATE INDEX IF NOT EXISTS idx_access_logs_isp ON access_logs(isp)",
+            "CREATE INDEX IF NOT EXISTS idx_threat_tags_tag ON threat_tags(tag)",
+            "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(token_hash)",
+            "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)",
+        ]:
+            conn.execute(idx)
+        admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+        if admin_count == 0:
+            if DEFAULT_ADMIN_PASSWORD:
+                conn.execute(
+                    "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
+                    [DEFAULT_ADMIN_USERNAME, pbkdf2_password(DEFAULT_ADMIN_PASSWORD)],
+                )
+                print(f"✅ Admin user created: {DEFAULT_ADMIN_USERNAME}")
+            else:
+                # Dev fallback: allows migration from token-only mode without locking yourself out.
+                fallback_password = ADMIN_TOKEN or "changeme"
+                conn.execute(
+                    "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
+                    [DEFAULT_ADMIN_USERNAME, pbkdf2_password(fallback_password)],
+                )
+                print(f"⚠️ Admin user created with fallback password for {DEFAULT_ADMIN_USERNAME}. Set DEFAULT_ADMIN_PASSWORD.")
+        conn.commit()
+    print(f"✅ DB initialisée : {DB_FILE}")

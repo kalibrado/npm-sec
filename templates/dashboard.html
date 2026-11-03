@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+
+<html data-theme="dark" lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NPM Security Dashboard</title>
+<meta content="#080c14" name="theme-color"/>
+<meta content="yes" name="mobile-web-app-capable"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<meta content="NPM Security" name="apple-mobile-web-app-title"/>
+<meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
+<link href="/static/manifest.webmanifest" rel="manifest"/>
+<link href="/static/icons/icon-192.png" rel="apple-touch-icon"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" rel="stylesheet"/>
+<link href="/static/dashboard.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+</head>
+<body data-view="home">
+<!-- ── TOPBAR ── -->
+<div class="topbar">
+<div class="topbar-left">
+<div class="logo">NPM <span>Security</span></div>
+<div class="live-badge"><span class="live-dot"></span> LIVE</div>
+<div class="desktop-tabs" id="desktop-tabs">
+<button class="desktop-tab active" data-view="home">Accueil</button>
+<button class="desktop-tab" data-view="logs">Logs</button>
+<button class="desktop-tab" data-view="map">Carte</button>
+<button class="desktop-tab" data-view="threats">Menaces</button>
+<button class="desktop-tab" data-view="lists">Listes</button>
+<button class="desktop-tab" data-view="health">Santé</button>
+<button class="desktop-tab" data-view="config">Config</button>
+</div>
+</div>
+<div class="topbar-right">
+<button class="icon-btn" id="blocklist-open-btn" title="Block List Manager">
+<svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="15">
+<circle cx="12" cy="12" r="10"></circle>
+<line x1="4.93" x2="19.07" y1="4.93" y2="19.07"></line>
+</svg>
+</button>
+<button class="icon-btn" id="health-view-btn" title="Santé NPM">❤</button>
+<button class="icon-btn" id="config-view-btn" title="Configuration">⚙</button>
+<button class="icon-btn" id="lists-view-btn" title="Listes de sécurité">☰</button>
+<button class="icon-btn" id="user-btn" title="Utilisateur">👤</button>
+<button class="icon-btn" id="theme-btn" title="Basculer thème">☀️</button>
+<div id="conn-status">
+<div id="conn-dot"></div>
+<span id="conn-text">Connexion…</span>
+</div>
+<span id="last-update"></span>
+</div>
+</div>
+<!-- ── STATS ROW ── -->
+<div class="stats-row">
+<div class="stat">
+<div class="stat-label">Total</div>
+<div class="stat-val c-white" id="s-total">0</div>
+<div class="stat-sub">historique</div>
+</div>
+<div class="stat">
+<div class="stat-label">Bloquées</div>
+<div class="stat-val c-red" id="s-blocked">0</div>
+<div class="stat-sub" id="s-block-rate">0%</div>
+</div>
+<div class="stat">
+<div class="stat-label">Autorisées</div>
+<div class="stat-val c-green" id="s-allowed">0</div>
+<div class="stat-sub">légitimes</div>
+</div>
+<div class="stat">
+<div class="stat-label">IPs uniques</div>
+<div class="stat-val c-blue" id="s-ips">0</div>
+<div class="stat-sub">attaquants</div>
+</div>
+<div class="stat stat-desktop">
+<div class="stat-label">Pays bloqués</div>
+<div class="stat-val c-orange" id="s-countries">0</div>
+<div class="stat-sub">géoblocage</div>
+</div>
+<div class="stat stat-desktop">
+<div class="stat-label">Affichés</div>
+<div class="stat-val c-blue" id="s-shown">0</div>
+<div class="stat-sub" id="s-page-info">page 1</div>
+</div>
+</div>
+<!-- ── MAP ── -->
+<div class="map-section" id="map-section">
+<div id="map"></div>
+<div class="map-controls">
+<button class="map-ctrl-btn" id="choropleth-btn" title="Carte choroplèthe">🗺</button>
+</div>
+<div class="map-legend">
+<span class="legend-dot blocked"></span><span>Bloqué</span>
+<span class="legend-dot allowed"></span><span>Légitime</span>
+<span id="map-counter" style="margin-left:4px;font-family:var(--mono)">0 pts</span>
+</div>
+</div>
+<!-- ── LAYOUT ── -->
+<div class="layout">
+<!-- HOME / OVERVIEW PANEL -->
+<div class="main-panel home-panel" id="panel-home">
+<div class="home-hero">
+<div>
+<div class="home-kicker">Vue mobile-first</div>
+<h1>Security Overview</h1>
+<p>Résumé live du reverse proxy, sans devoir ouvrir six onglets comme un contrôleur aérien fatigué.</p>
+</div>
+<div class="security-score-card">
+<span class="score-label">Security Score</span>
+<strong id="home-score">—</strong>
+<span id="home-score-sub">calcul en cours</span>
+</div>
+</div>
+<div class="home-grid">
+<article class="home-card danger"><span>Menaces 24h</span><strong id="home-threats-24h">—</strong><small id="home-threats-sub">score ≥ 50</small></article>
+<article class="home-card"><span>Requêtes</span><strong id="home-total">—</strong><small>historique</small>
+</article>
+<article class="home-card success"><span>Bloquées</span><strong id="home-blocked">—</strong><small id="home-block-rate">—</small></article>
+<article class="home-card warning"><span>Top erreur NPM</span><strong id="home-top-error">—</strong><small id="home-top-error-sub">aucune donnée</small></article>
+</div>
+<div class="home-sections">
+<section class="list-card">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Dernières menaces</div>
+<div class="list-subtitle">Les signaux qui méritent ton attention.</div>
+</div><button class="page-btn" onclick="setView('threats')">Voir</button>
+</div>
+<div class="mobile-card-list" id="home-threat-list"></div>
+</section>
+<section class="list-card">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Activité sécurité</div>
+<div class="list-subtitle">Menaces, exports, bans et décisions récentes.</div>
+</div><button class="page-btn" id="activity-refresh">Rafraîchir</button>
+</div>
+<div class="mobile-card-list" id="home-activity-list"></div>
+</section>
+<section class="list-card">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">État runtime</div>
+<div class="list-subtitle">DB, logs, exports et session.</div>
+</div><button class="page-btn" onclick="setView('config')">Config</button>
+</div>
+<div class="home-runtime-list" id="home-runtime-list"></div>
+</section>
+<section class="list-card">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Intégrations</div>
+<div class="list-subtitle">Widget Homepage et notifications navigateur.</div>
+</div><button class="page-btn" id="notif-enable">Activer notifications</button>
+</div>
+<div class="home-runtime-list">
+<div class="runtime-pill"><span>Homepage</span><strong>/widget</strong></div>
+<div class="runtime-pill"><span>PWA</span><strong>installable</strong></div>
+</div>
+</section>
+</div>
+</div>
+<!-- MAIN PANEL -->
+<div class="main-panel" id="panel-logs">
+<div class="toolbar">
+<input autocomplete="off" class="search" id="search" placeholder="IP, URI, pays… (ex: ip:1.2.3.4)"/>
+<div class="chip-group">
+<button class="chip active" data-f="all">Tous</button>
+<button class="chip danger-chip" data-f="blocked">Bloqués</button>
+<button class="chip success-chip" data-f="allowed">OK</button>
+</div>
+<span class="row-count-label" id="row-count"></span>
+</div>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Heure</th>
+<th>IP</th>
+<th class="col-sm">Pays</th>
+<th>Status</th>
+<th class="col-md">Méthode</th>
+<th class="col-md">Host</th>
+<th class="col-lg">URI</th>
+<th class="col-xl">ISP</th>
+<th>Résultat</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+<div class="pagination">
+<button class="page-btn" disabled="" id="btn-prev">← Préc.</button>
+<span id="page-info"></span>
+<button class="page-btn" disabled="" id="btn-next">Suiv. →</button>
+<select id="page-size">
+<option value="50">50 / page</option>
+<option selected="" value="100">100 / page</option>
+<option value="200">200 / page</option>
+</select>
+</div>
+</div>
+<!-- THREATS PANEL -->
+<div class="main-panel threats-panel" id="panel-threats">
+<div class="toolbar">
+<div class="side-title" style="padding:0">Menaces détectées</div>
+<select class="search" id="threat-min-score" style="max-width:160px">
+<option value="0">Score ≥ 0</option>
+<option value="25">Score ≥ 25</option>
+<option selected="" value="50">Score ≥ 50</option>
+<option value="75">Score ≥ 75</option>
+</select>
+<button class="page-btn" id="threat-refresh">Rafraîchir</button>
+</div>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>IP</th>
+<th>Score</th>
+<th>Type</th>
+<th class="col-lg">URI</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="threat-tbody"></tbody>
+</table>
+</div>
+</div>
+<!-- SECURITY LISTS PANEL -->
+<div class="main-panel lists-panel" id="panel-lists">
+<div class="toolbar lists-toolbar">
+<div class="side-title" style="padding:0">Listes de sécurité</div>
+<div class="chip-group">
+<button class="chip active" data-list-tab="all">Tous</button>
+<button class="chip danger-chip" data-list-tab="blocked">Blocked</button>
+<button class="chip success-chip" data-list-tab="trusted">Trusted</button>
+<button class="chip" data-list-tab="history">Historique</button>
+</div>
+<button class="page-btn" id="lists-refresh">Rafraîchir</button>
+</div>
+<div class="lists-content">
+<section class="list-card" data-list-section="blocked">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Blocklist</div>
+<div class="list-subtitle">IP, CIDR et pays actuellement bloqués</div>
+</div>
+<span class="list-count" id="lists-blocked-count">0</span>
+</div>
+<div class="inline-form">
+<input class="search" id="lists-block-input" placeholder="IP, CIDR ou pays (CN)"/>
+<input class="search" id="lists-block-reason" placeholder="Raison"/>
+<button class="apply-btn compact" id="lists-block-add">+ Bloquer</button>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Type</th>
+<th>Valeur</th>
+<th>Raison</th>
+<th>Date</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="lists-blocked-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-list-section="trusted">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Trusted list</div>
+<div class="list-subtitle">Entrées exclues de l’auto-ban</div>
+</div>
+<span class="list-count success" id="lists-trusted-count">0</span>
+</div>
+<div class="inline-form">
+<input class="search" id="lists-trusted-input" placeholder="IP, CIDR, pays ou UA:Nextcloud"/>
+<input class="search" id="lists-trusted-reason" placeholder="Raison"/>
+<button class="apply-btn compact" id="lists-trusted-add">+ Trust</button>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Type</th>
+<th>Valeur</th>
+<th>Raison</th>
+<th>Date</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="lists-trusted-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-list-section="history">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Historique</div>
+<div class="list-subtitle">Bannissements, suppressions, exports et auto-ban</div>
+</div>
+<span class="list-count" id="lists-history-count">0</span>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Date</th>
+<th>Cible</th>
+<th>Type</th>
+<th>Action</th>
+<th>Raison</th>
+</tr>
+</thead>
+<tbody id="lists-history-body"></tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+<!-- NPM HEALTH PANEL -->
+<div class="main-panel health-panel" id="panel-health">
+<div class="toolbar lists-toolbar">
+<div class="side-title" style="padding:0">Santé NPM</div>
+<button class="page-btn" id="health-refresh">Rafraîchir</button>
+</div>
+<div class="lists-content health-content">
+<section class="list-card" data-health-card="summary">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Résumé erreurs</div>
+<div class="list-subtitle">Sépare les vraies pannes applicatives des attaques, concept étrangement utile.
+              </div>
+</div>
+<span class="list-count danger" id="health-error-rate">0%</span>
+</div>
+<div class="health-grid" id="health-summary"></div>
+</section>
+<div class="health-right-stack" data-health-stack="right">
+<section class="list-card" data-health-card="statuses">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Top statuts HTTP en erreur</div>
+</div>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Status</th>
+<th>Nombre</th>
+</tr>
+</thead>
+<tbody id="health-status-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-health-card="uris">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">URI en 5xx</div>
+</div>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Host</th>
+<th>URI</th>
+<th>Status</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody id="health-uri-body"></tbody>
+</table>
+</div>
+</section>
+</div>
+<section class="list-card" data-health-card="hosts">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Hosts instables</div>
+</div>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Host</th>
+<th>5xx</th>
+<th>4xx/5xx</th>
+<th>Dernière</th>
+</tr>
+</thead>
+<tbody id="health-host-body"></tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+<!-- CONFIG PANEL -->
+<div class="main-panel config-panel" id="panel-config">
+<div class="toolbar lists-toolbar">
+<div class="side-title" style="padding:0">Configuration runtime</div>
+<button class="page-btn" id="config-refresh">Rafraîchir</button>
+<button class="page-btn" id="simulate-autoban">Simuler auto-ban</button>
+</div>
+<div class="lists-content config-content">
+
+
+
+
+
+
+
+
+<section class="list-card" data-config-card="system">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">État système</div>
+<div class="list-subtitle">Secrets masqués, parce qu’on apprend parfois.</div>
+</div>
+<span class="list-count" id="config-version">—</span>
+</div>
+<div class="health-grid" id="config-grid"></div>
+</section>
+<section class="list-card" data-config-card="maintenance">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Maintenance DB &amp; exports</div>
+<div class="list-subtitle">Backup, compactage et CSV. Parce que perdre 100k logs pour économiser un bouton
+                serait grotesque.</div>
+</div>
+</div>
+<div class="list-actions">
+<button class="page-btn" id="csv-logs">CSV logs</button>
+<button class="page-btn" id="csv-threats">CSV menaces</button>
+<button class="page-btn" id="db-backup">Backup DB</button>
+<button class="page-btn danger" id="db-compact">Compact DB</button>
+</div>
+<div class="health-grid" id="db-maintenance-grid"></div>
+</section>
+<section class="list-card" data-config-card="simulate">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Simulation auto-ban</div>
+</div><span class="list-count danger" id="simulate-count">0</span>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>IP</th>
+<th>Score</th>
+<th>Events</th>
+<th>Type</th>
+<th>ISP</th>
+</tr>
+</thead>
+<tbody id="simulate-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-config-card="users" id="users-card">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Utilisateurs</div>
+<div class="list-subtitle">Admins et viewers. Oui, enfin autre chose qu’un token collé dans le navigateur.
+              </div>
+</div>
+<button class="page-btn" id="users-refresh">Rafraîchir</button>
+</div>
+<div class="list-actions">
+<input class="search" id="user-new-name" placeholder="username"/>
+<input class="search" id="user-new-password" placeholder="mot de passe" type="password"/>
+<select class="search" id="user-new-role">
+<option value="viewer">viewer</option>
+<option value="admin">admin</option>
+</select>
+<button class="page-btn" id="user-create">+ Utilisateur</button>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>User</th>
+<th>Rôle</th>
+<th>Actif</th>
+<th>Dernier login</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="users-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-config-card="asn">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Corrélation ASN / ISP</div>
+</div>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>ASN</th>
+<th>ISP</th>
+<th>Total</th>
+<th>Menaces</th>
+<th>Max</th>
+</tr>
+</thead>
+<tbody id="asn-isp-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-config-card="bruteforce">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Brute force par host</div>
+</div>
+</div>
+<div class="list-table-wrap">
+<table class="compact-table">
+<thead>
+<tr>
+<th>Host</th>
+<th>IP</th>
+<th>Tentatives</th>
+<th>Refus</th>
+<th>ISP</th>
+</tr>
+</thead>
+<tbody id="bruteforce-body"></tbody>
+</table>
+</div>
+</section>
+<section class="list-card" data-config-card="tags">
+<div class="list-card-head">
+<div>
+<div class="side-title" style="padding:0">Tags de menaces</div>
+</div>
+</div>
+<div class="tags-cloud" id="threat-tags-cloud"></div>
+</section>
+</div>
+</div>
+<!-- SIDEBAR -->
+<div class="sidebar" id="panel-stats">
+<!-- Donut statuts -->
+<div class="side-section">
+<div class="side-title">Statuts HTTP</div>
+<div class="donut-wrap">
+<canvas id="donutChart"></canvas>
+<div class="donut-center" id="donut-center"></div>
+</div>
+<div id="donut-legend"></div>
+</div>
+<!-- Top pays -->
+<div class="side-section">
+<div class="side-title">Top pays</div>
+<div id="country-list"></div>
+</div>
+<!-- Top attaquants -->
+<div class="side-section">
+<div class="side-title">Top attaquants</div>
+<div id="ip-list"></div>
+</div>
+<!-- Heatmap -->
+<div class="side-section">
+<div class="side-title">Heatmap 7 jours</div>
+<div id="heatmap-container">
+<div id="heatmap-grid"></div>
+</div>
+</div>
+<!-- Timeline -->
+<div class="side-section">
+<div class="side-title">Timeline</div>
+<div id="chart-container">
+<canvas id="timelineChart"></canvas>
+</div>
+</div>
+</div>
+</div>
+<!-- ── FLOATING PILL ── -->
+<div class="float-pill" id="float-pill"></div>
+<!-- ── BOTTOM NAV (mobile) ── -->
+<nav class="bottom-nav">
+<button class="nav-btn active" data-view="home">
+<span class="nav-ico">⌂</span><span>Accueil</span>
+</button>
+<button class="nav-btn" data-view="logs">
+<span class="nav-ico">▤</span><span>Logs</span>
+</button>
+<button class="nav-btn" data-view="threats">
+<span class="nav-ico">⚠</span><span>Menaces</span>
+</button>
+<button class="nav-btn" data-view="lists">
+<span class="nav-ico">☰</span><span>Listes</span>
+</button>
+<button class="nav-btn" data-view="more">
+<span class="nav-ico">•••</span><span>Plus</span>
+</button>
+</nav>
+<!-- ── MORE DRAWER ── -->
+<div class="sheet-backdrop" id="more-backdrop"></div>
+<div class="search-sheet more-sheet" id="more-sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<span class="sheet-title">Plus</span>
+<button class="sheet-close" id="more-close">✕</button>
+</div>
+<div class="sheet-body more-grid">
+<button class="more-item" data-more-view="map"><span>🗺</span><strong>Carte</strong><small>trafic
+          géo</small></button>
+<button class="more-item" data-more-view="stats"><span>📊</span><strong>Stats</strong><small>graphiques</small></button>
+<button class="more-item" data-more-view="health"><span>❤</span><strong>Santé</strong><small>erreurs
+          NPM</small></button>
+<button class="more-item" data-more-view="config"><span>⚙</span><strong>Config</strong><small>runtime</small></button>
+<button class="more-item" data-more-view="search"><span>🔎</span><strong>Filtres</strong><small>recherche</small></button>
+<button class="more-item" id="more-logout"><span>⏻</span><strong>Logout</strong><small>session</small></button>
+</div>
+</div>
+<!-- ── SEARCH DRAWER ── -->
+<div class="sheet-backdrop" id="search-backdrop"></div>
+<div class="search-sheet" id="search-sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<span class="sheet-title">Recherche &amp; Filtres</span>
+<button class="sheet-close" id="search-close">✕</button>
+</div>
+<div class="sheet-body">
+<input autocomplete="off" class="search sheet-search" id="search-mobile" placeholder="IP, URI, pays, ISP…"/>
+<div class="chip-group" style="margin-top:10px">
+<button class="chip active" data-sf="all">Tous</button>
+<button class="chip danger-chip" data-sf="blocked">Bloqués</button>
+<button class="chip success-chip" data-sf="allowed">Autorisés</button>
+</div>
+<div class="search-tips">
+<p>💡 Syntaxe structurée :</p>
+<code>ip:1.2.3.4</code><code>host:example.com</code><code>status:403</code><code>country_code:CN</code><code>isp:alibaba</code>
+</div>
+<button class="apply-btn" id="search-apply">Appliquer →</button>
+</div>
+</div>
+<!-- ── BLOCK LIST DRAWER ── -->
+<div class="sheet-backdrop" id="blocklist-backdrop"></div>
+<div class="blocklist-drawer" id="blocklist-drawer">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<span class="sheet-title">🛡️ Block List Manager</span>
+<button class="sheet-close" id="blocklist-close">✕</button>
+</div>
+<div class="sheet-body">
+<div class="bl-form">
+<input class="search" id="bl-input" placeholder="IP, CIDR ou code pays (CN, 1.2.3.4, 10.0.0.0/8)"/>
+<input class="search" id="bl-reason" placeholder="Raison (optionnel)" style="margin-top:8px"/>
+<button class="apply-btn" id="bl-add" style="margin-top:8px">+ Ajouter à la blocklist</button>
+</div>
+<div class="bl-tools">
+<button class="page-btn" id="bl-export-json">Export JSON</button>
+<button class="page-btn" id="bl-export-nginx">Export Nginx</button>
+<button class="page-btn" id="bl-apply-export">Écrire fichiers</button>
+<button class="page-btn danger-lite" id="bl-apply-reload">Écrire + reload</button>
+<button class="page-btn" id="bl-history-btn">Historique</button>
+</div>
+<div class="bl-export-status" id="bl-export-status"></div>
+<div class="ban-events-list" id="ban-events-list" style="display:none"></div>
+<div class="trusted-box">
+<div class="bl-list-header">
+<span class="side-title" style="padding:10px 0 6px">Entrées de confiance</span>
+<span id="trusted-count" style="font-size:11px;color:var(--muted)"></span>
+</div>
+<div class="bl-form">
+<input class="search" id="trusted-input" placeholder="IP, CIDR, pays ou UA:Nextcloud"/>
+<input class="search" id="trusted-reason" placeholder="Raison whitelist (optionnel)" style="margin-top:8px"/>
+<button class="apply-btn" id="trusted-add" style="margin-top:8px">+ Ajouter à la whitelist</button>
+</div>
+<div id="trusted-list"></div>
+</div>
+<div class="bl-list-header">
+<span class="side-title" style="padding:10px 0 6px">Entrées actives</span>
+<span id="bl-count" style="font-size:11px;color:var(--muted)"></span>
+</div>
+<div id="bl-list"></div>
+</div>
+</div>
+<!-- ── DETAIL MODAL / BOTTOM SHEET ── -->
+<div class="overlay" id="overlay">
+<div class="modal" id="modal">
+<div class="sheet-handle modal-handle"></div>
+<div class="modal-head">
+<h2 id="modal-title">Détail de la requête</h2>
+<button class="modal-close" id="modal-close">✕</button>
+</div>
+<div class="modal-body" id="modal-body"></div>
+</div>
+</div>
+<!-- ── TOAST ── -->
+<div id="toast-zone"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

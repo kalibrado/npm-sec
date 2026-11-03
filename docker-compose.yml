@@ -1,0 +1,39 @@
+services:
+  npm-security-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: npm-security-dashboard:0.6.0
+    container_name: npm-security-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${DASHBOARD_PORT:-8000}:8000"
+    volumes:
+      - ./data:/data
+      - ${NPM_LOGS_PATH:-/var/log/docker-app/nginx-proxy-manager}:/logs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)); raise SystemExit(0 if data.get('status') in ('ok','degraded') else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Optionnel : rattacher au même réseau Docker que Nginx Proxy Manager.
+# networks:
+#   default:
+#     name: npm_default
+#     external: true
