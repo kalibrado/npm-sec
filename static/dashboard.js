@@ -1129,6 +1129,7 @@ async function loadBlocklist() {
           <span class="bl-value">${esc(item.value)}</span>
           <button class="bl-remove" onclick="removeBlock(${item.id})" title="Supprimer">✕</button>
         </div>
+        <div class="bl-reason">Portée : ${item.host ? esc(item.host) : 'Global'}</div>
         ${item.reason?`<div class="bl-reason">${esc(item.reason)}</div>`:''}
         <div class="bl-date">${fmtDateTime(item.created_at)}</div>
       </div>`).join('');
@@ -1138,19 +1139,21 @@ async function loadBlocklist() {
 async function addBlock() {
   const value = document.getElementById('bl-input').value.trim();
   const reason = document.getElementById('bl-reason').value.trim();
+  const host = document.getElementById('bl-host')?.value.trim() || null;
   if (!value || !requireAdminClient()) return;
   const type = value.includes('/') ? 'cidr' : /^[A-Za-z]{2}$/.test(value) ? 'country' : 'ip';
   try {
     const r = await adminFetch('/blocklist', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type, value, reason})
+      body: JSON.stringify({type, value, reason, host})
     });
     const d = await r.json();
     if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Ajout de règle refusé');
     document.getElementById('bl-input').value = '';
     document.getElementById('bl-reason').value = '';
-    toast(`${value} enregistré, application Nginx en attente`, 'success');
+    document.getElementById('bl-host').value = '';
+    toast(`${value} enregistré pour ${host || 'tous les domaines'}, application Nginx en attente`, 'success');
     loadBlocklist();
     if (document.body.dataset.view === 'lists') loadSecurityLists();
   } catch (e) {
@@ -1724,7 +1727,7 @@ async function loadSecurityLists() {
   const historyBody = document.getElementById('lists-history-body');
   if (!blockedBody || !trustedBody || !historyBody) { securityListsLoading = false; return; }
 
-  blockedBody.innerHTML = emptyRow(6, '⏳', 'Chargement blocklist…');
+  blockedBody.innerHTML = emptyRow(7, '⏳', 'Chargement blocklist…');
   trustedBody.innerHTML = emptyRow(5, '⏳', 'Chargement trusted list…');
   historyBody.innerHTML = emptyRow(5, '⏳', 'Chargement historique…');
 
@@ -1743,11 +1746,12 @@ async function loadSecurityLists() {
       <tr>
         <td><span class="list-type-pill">${esc(item.type)}</span></td>
         <td class="ip-cell">${esc(item.value)}</td>
+        <td>${item.host ? esc(item.host) : '<span class="list-type-pill">Global</span>'}</td>
         <td>${esc(item.reason || '—')}</td>
         <td class="time-cell">${item.expires_at ? fmtDateTime(item.expires_at) : 'Permanent'}</td>
         <td class="time-cell">${fmtDateTime(item.created_at)}</td>
         <td><button class="list-action-btn" onclick="removeBlock(${Number(item.id)})">Supprimer</button></td>
-      </tr>`).join('') : emptyRow(6, '🧘', 'Aucune entrée bloquée');
+      </tr>`).join('') : emptyRow(7, '🧘', 'Aucune entrée bloquée');
 
     trustedBody.innerHTML = trusted.length ? trusted.map(item => `
       <tr>
@@ -1769,7 +1773,7 @@ async function loadSecurityLists() {
 
     applyListTab(currentListTab);
   } catch (e) {
-    blockedBody.innerHTML = emptyRow(6, '⚠️', 'Erreur de chargement des listes');
+    blockedBody.innerHTML = emptyRow(7, '⚠️', 'Erreur de chargement des listes');
     trustedBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement des listes');
     historyBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement de l’historique');
   } finally {
@@ -1780,17 +1784,19 @@ async function loadSecurityLists() {
 async function addBlockFromLists() {
   const raw = document.getElementById('lists-block-input')?.value.trim();
   const reason = document.getElementById('lists-block-reason')?.value.trim() || 'Manual block via lists tab';
+  const host = document.getElementById('lists-block-host')?.value.trim() || null;
   const durationValue = document.getElementById('lists-block-duration')?.value || '';
   const duration_minutes = durationValue ? Number(durationValue) : null;
   if (!raw) return;
   const {type, value} = detectListType(raw);
   try {
-    const r = await adminFetch('/blocklist', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, reason, duration_minutes})});
+    const r = await adminFetch('/blocklist', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, reason, duration_minutes, host})});
     const d = await r.json();
     if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur blocklist');
     document.getElementById('lists-block-input').value = '';
     document.getElementById('lists-block-reason').value = '';
-    toast(`${value} enregistré, application Nginx en attente`, 'success');
+    document.getElementById('lists-block-host').value = '';
+    toast(`${value} enregistré pour ${host || 'tous les domaines'}, application Nginx en attente`, 'success');
     loadBlocklist();
     loadSecurityLists();
   } catch(e) { toast(e.message || 'Erreur ajout blocklist', 'danger'); }
