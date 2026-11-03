@@ -67,6 +67,11 @@ La purge **ne touche pas** aux logs sources de Nginx et ne modifie
 pas la configuration ou les conteneurs NPM. Les nouvelles requêtes
 continueront d'être collectées.
 
+Une entrée d'audit `PURGE_LOGS` est ajoutée à `ban_events`
+dans la même transaction, avec l'administrateur et les volumes supprimés.
+La traçabilité des actions administratives reste donc disponible après
+la purge.
+
 **Attention :** cette opération est destructrice et ne crée pas
 automatiquement de sauvegarde. Pour conserver un historique, effectuer
 d'abord une sauvegarde de la base via **Config → Backup DB**.
