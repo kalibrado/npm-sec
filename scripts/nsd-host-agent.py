@@ -173,7 +173,13 @@ class DockerNPM:
 
     def assert_safe_paths(self):
         """Refuse symlinks in NPM custom paths before any write or snapshot."""
-        paths = (CUSTOM, TARGET, *SNIPPETS.values())
+        paths = tuple(dict.fromkeys((
+            "/data", "/data/nginx", CUSTOM, TARGET,
+            *(parent for target in SNIPPETS.values() for parent in
+              (str(Path(target).parent),)),
+            *SNIPPETS.values(),
+            *(target + ".candidate" for target in SNIPPETS.values()),
+        )))
         for path in paths:
             # docker exec test returns 1 for missing paths, which is safe here.
             result = subprocess.run(
