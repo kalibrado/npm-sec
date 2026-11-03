@@ -64,6 +64,8 @@ def _bundle(conn, settings):
 def request_deployment(payload: RequestDeployment, user: dict = Depends(require_admin)):
     if payload.confirmation != "APPLIQUER":
         raise HTTPException(status_code=422, detail="Confirmation APPLIQUER requise")
+    if len(os.environ.get("NSD_AGENT_TOKEN", "")) < 32:
+        raise HTTPException(status_code=503, detail="Agent non configuré : aucune demande enregistrée")
     with get_db() as conn:
         try:
             conn.execute("BEGIN IMMEDIATE")
@@ -84,6 +86,8 @@ def request_deployment(payload: RequestDeployment, user: dict = Depends(require_
                 )
             files = _bundle(conn, values)
             digest = bundle_hash(files)
+            if sum(len(value.encode("utf-8")) for value in files.values()) > 2 * 1024 * 1024:
+                raise HTTPException(status_code=422, detail="Bundle Nginx trop volumineux")
             row = conn.execute(
                 """INSERT INTO nsd_deployment_jobs
                    (revision,requested_by,bundle_sha256,bundle_json)
