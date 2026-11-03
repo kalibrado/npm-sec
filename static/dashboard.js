@@ -366,6 +366,11 @@ function toast(msg, type='info', dur=3200) {
 }
 
 // Form errors must be visible in the page as well as in transient notifications.
+function apiErrorMessage(data, fallback='Action impossible') {
+  const detail = data?.detail || data?.error;
+  if (Array.isArray(detail)) return detail.map(item => item.msg || String(item)).join(' ; ');
+  return typeof detail === 'string' ? detail : fallback;
+}
 function formFeedback(id, message, state='info') {
   const target = document.getElementById(id);
   if (!target) return;
@@ -1194,29 +1199,38 @@ async function loadBlocklist() {
 }
 
 async function addBlock() {
-  const value = document.getElementById('bl-input').value.trim();
-  const reason = document.getElementById('bl-reason').value.trim();
-  const host = document.getElementById('bl-host')?.value.trim() || null;
-  if (!value || !requireAdminClient()) return;
-  const type = value.includes('/') ? 'cidr' : /^[A-Za-z]{2}$/.test(value) ? 'country' : 'ip';
-  try {
-    const r = await adminFetch('/blocklist', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type, value, reason, host})
-    });
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Ajout de règle refusé');
-    document.getElementById('bl-input').value = '';
-    document.getElementById('bl-reason').value = '';
-    document.getElementById('bl-host').value = '';
-    toast(`${value} enregistré pour ${host || 'tous les domaines'}, application Nginx en attente`, 'success');
-    loadBlocklist();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch (e) {
-    toast(e.message || 'Ajout refusé', 'danger');
-  }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('bl-input', 'bl-form-feedback', 'Renseigne une IP, un CIDR ou un code pays.')) return;
+  await withBusyButton('bl-add', 'Ajout…', async () => {
+    const value = document.getElementById('bl-input').value.trim();
+    const reason = document.getElementById('bl-reason').value.trim();
+    const host = document.getElementById('bl-host')?.value.trim() || null;
+    const type = value.includes('/') ? 'cidr' : /^[A-Za-z]{2}$/.test(value) ? 'country' : 'ip';
+    formFeedback('bl-form-feedback', 'Enregistrement de la règle…', 'loading');
+    try {
+      const r = await adminFetch('/blocklist', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type, value, reason, host})
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Ajout de règle refusé'));
+      document.getElementById('bl-input').value = '';
+      document.getElementById('bl-reason').value = '';
+      document.getElementById('bl-host').value = '';
+      const message = `${value} enregistré pour ${host || 'tous les domaines'}. Application Nginx en attente.`;
+      formFeedback('bl-form-feedback', message, 'success');
+      toast(message, 'success');
+      await loadBlocklist();
+      if (document.body.dataset.view === 'lists') await loadSecurityLists();
+      if (document.body.dataset.view === 'control') void loadSecurityControl();
+    } catch (e) {
+      formFeedback('bl-form-feedback', e.message || 'Ajout refusé', 'error');
+      toast(e.message || 'Ajout refusé', 'danger');
+    }
+  });
 }
+
 async function removeBlock(id) {
   try {
     await adminFetch(`/blocklist/${encodeURIComponent(id)}`,{method:'DELETE'});
@@ -1534,25 +1548,38 @@ async function loadTrusted() {
 }
 
 async function addTrusted() {
-  const raw = document.getElementById('trusted-input').value.trim();
-  const reason = document.getElementById('trusted-reason').value.trim();
-  if (!raw) return;
-  let type = 'ip';
-  let value = raw;
-  if (/^ua:/i.test(raw)) { type = 'ua'; value = raw.slice(3).trim(); }
-  else if (raw.includes('/')) type = 'cidr';
-  else if (/^[A-Za-z]{2}$/.test(raw)) { type = 'country'; value = raw.toUpperCase(); }
-  try {
-    const r = await adminFetch('/trusted',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type,value,reason}) });
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur whitelist');
-    document.getElementById('trusted-input').value = '';
-    document.getElementById('trusted-reason').value = '';
-    toast(`${value} ajouté à la whitelist`, 'success');
-    loadTrusted();
-    loadBanEvents();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch(e) { toast(e.message || 'Erreur ajout whitelist', 'danger'); }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('trusted-input', 'trusted-form-feedback', 'Renseigne une IP, un CIDR, un pays ou un User-Agent.')) return;
+  await withBusyButton('trusted-add', 'Ajout…', async () => {
+    const raw = document.getElementById('trusted-input').value.trim();
+    const reason = document.getElementById('trusted-reason').value.trim();
+    let type = 'ip';
+    let value = raw;
+    if (/^ua:/i.test(raw)) { type = 'ua'; value = raw.slice(3).trim(); }
+    else if (raw.includes('/')) type = 'cidr';
+    else if (/^[A-Za-z]{2}$/.test(raw)) { type = 'country'; value = raw.toUpperCase(); }
+    if (!value) {
+      requiredInput('trusted-input', 'trusted-form-feedback', 'Une valeur doit suivre UA:.');
+      return;
+    }
+    formFeedback('trusted-form-feedback', 'Ajout de l’exception de confiance…', 'loading');
+    try {
+      const r = await adminFetch('/trusted', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,value,reason})});
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Erreur whitelist'));
+      document.getElementById('trusted-input').value = '';
+      document.getElementById('trusted-reason').value = '';
+      formFeedback('trusted-form-feedback', `${value} ajouté aux entrées de confiance.`, 'success');
+      toast(`${value} ajouté à la liste de confiance`, 'success');
+      await loadTrusted();
+      loadBanEvents();
+      if (document.body.dataset.view === 'lists') await loadSecurityLists();
+      if (document.body.dataset.view === 'control') void loadSecurityControl();
+    } catch(e) {
+      formFeedback('trusted-form-feedback', e.message || 'Erreur ajout whitelist', 'error');
+      toast(e.message || 'Erreur ajout whitelist', 'danger');
+    }
+  });
 }
 
 async function removeTrusted(id) {
@@ -2056,43 +2083,64 @@ async function loadSecurityLists() {
 }
 
 async function addBlockFromLists() {
-  const raw = document.getElementById('lists-block-input')?.value.trim();
-  const reason = document.getElementById('lists-block-reason')?.value.trim() || 'Manual block via lists tab';
-  const host = document.getElementById('lists-block-host')?.value.trim() || null;
-  const durationValue = document.getElementById('lists-block-duration')?.value || '';
-  const duration_minutes = durationValue ? Number(durationValue) : null;
-  if (!raw) return;
-  const {type, value} = detectListType(raw);
-  try {
-    const r = await adminFetch('/blocklist', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, reason, duration_minutes, host})});
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur blocklist');
-    document.getElementById('lists-block-input').value = '';
-    document.getElementById('lists-block-reason').value = '';
-    document.getElementById('lists-block-host').value = '';
-    toast(`${value} enregistré pour ${host || 'tous les domaines'}, application Nginx en attente`, 'success');
-    loadBlocklist();
-    loadSecurityLists();
-  } catch(e) { toast(e.message || 'Erreur ajout blocklist', 'danger'); }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('lists-block-input','lists-block-feedback','Saisis une IP, un CIDR ou un pays à bloquer.')) return;
+  await withBusyButton('lists-block-add', 'Ajout…', async () => {
+    const raw = document.getElementById('lists-block-input').value.trim();
+    const reason = document.getElementById('lists-block-reason')?.value.trim() || 'Manual block via lists tab';
+    const host = document.getElementById('lists-block-host')?.value.trim() || null;
+    const durationValue = document.getElementById('lists-block-duration')?.value || '';
+    const duration_minutes = durationValue ? Number(durationValue) : null;
+    const {type, value} = detectListType(raw);
+    formFeedback('lists-block-feedback', 'Enregistrement du blocage…', 'loading');
+    try {
+      const r = await adminFetch('/blocklist', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type, value, reason, duration_minutes, host})});
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Erreur blocklist'));
+      document.getElementById('lists-block-input').value = '';
+      document.getElementById('lists-block-reason').value = '';
+      document.getElementById('lists-block-host').value = '';
+      const message = `${value} enregistré pour ${host || 'tous les domaines'}. Application Nginx en attente.`;
+      formFeedback('lists-block-feedback', message, 'success');
+      toast(message, 'success');
+      void loadBlocklist();
+      await loadSecurityLists();
+    } catch(e) {
+      formFeedback('lists-block-feedback', e.message || 'Erreur ajout blocklist', 'error');
+      toast(e.message || 'Erreur ajout blocklist', 'danger');
+    }
+  });
 }
 
 async function addTrustedFromLists() {
-  const raw = document.getElementById('lists-trusted-input')?.value.trim();
-  const reason = document.getElementById('lists-trusted-reason')?.value.trim() || 'Trusted via lists tab';
-  if (!raw) return;
-  const {type, value} = detectListType(raw);
-  try {
-    const r = await adminFetch('/trusted', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, reason})});
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur trusted list');
-    document.getElementById('lists-trusted-input').value = '';
-    document.getElementById('lists-trusted-reason').value = '';
-    toast(`${value} ajouté à la trusted list`, 'success');
-    loadTrusted();
-    loadSecurityLists();
-  } catch(e) { toast(e.message || 'Erreur ajout trusted list', 'danger'); }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('lists-trusted-input','lists-trusted-feedback','Saisis une IP, un CIDR, un pays ou UA:... à autoriser.')) return;
+  await withBusyButton('lists-trusted-add', 'Ajout…', async () => {
+    const raw = document.getElementById('lists-trusted-input').value.trim();
+    const reason = document.getElementById('lists-trusted-reason')?.value.trim() || 'Trusted via lists tab';
+    const {type, value} = detectListType(raw);
+    if (!value) {
+      formFeedback('lists-trusted-feedback', 'Saisis une valeur après UA:.', 'error');
+      toast('Saisis une valeur après UA:.', 'warning');
+      return;
+    }
+    formFeedback('lists-trusted-feedback', 'Ajout de l’exception…', 'loading');
+    try {
+      const r = await adminFetch('/trusted',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type, value, reason})});
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Erreur trusted list'));
+      document.getElementById('lists-trusted-input').value = '';
+      document.getElementById('lists-trusted-reason').value = '';
+      formFeedback('lists-trusted-feedback', `${value} ajouté aux entrées de confiance.`, 'success');
+      toast(`${value} ajouté à la liste de confiance`, 'success');
+      void loadTrusted();
+      await loadSecurityLists();
+    } catch(e) {
+      formFeedback('lists-trusted-feedback', e.message || 'Erreur ajout trusted list', 'error');
+      toast(e.message || 'Erreur ajout trusted list', 'danger');
+    }
+  });
 }
-
 
 // ═══════════════════════════════════════════════════════════
 //  PATCH 5.5 · MOBILE-FIRST HOME + PWA
