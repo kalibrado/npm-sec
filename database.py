@@ -104,6 +104,13 @@ def init_db():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_blocklist_host ON blocklist(host)"
         )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS policy_modes (
+                host TEXT PRIMARY KEY,
+                mode TEXT NOT NULL CHECK(mode IN ('block','observe')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"""
+        )
         # Existing installations receive a nullable expiration column.
         block_columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(blocklist)")
