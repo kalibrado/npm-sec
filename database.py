@@ -186,12 +186,9 @@ def init_db():
                 )
                 print(f"✅ Admin user created: {DEFAULT_ADMIN_USERNAME}")
             else:
-                # Dev fallback: allows migration from token-only mode without locking yourself out.
-                fallback_password = ADMIN_TOKEN or "changeme"
-                conn.execute(
-                    "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
-                    [DEFAULT_ADMIN_USERNAME, pbkdf2_password(fallback_password)],
+                raise RuntimeError(
+                    "DEFAULT_ADMIN_PASSWORD is required to initialize the first admin user. "
+                    "Set a strong password before starting the dashboard."
                 )
-                print(f"⚠️ Admin user created with fallback password for {DEFAULT_ADMIN_USERNAME}. Set DEFAULT_ADMIN_PASSWORD.")
         conn.commit()
     print(f"✅ DB initialisée : {DB_FILE}")
