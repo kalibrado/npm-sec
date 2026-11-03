@@ -857,7 +857,7 @@
 <button class="page-btn danger-lite" id="bl-apply-reload">Écrire + reload</button>
 <button class="page-btn" id="bl-history-btn">Historique</button>
 </div>
-<div class="bl-export-status" id="bl-export-status"></div>
+<div class="bl-export-status" id="bl-export-status" role="status" aria-live="polite"></div>
 <div class="ban-events-list" id="ban-events-list" style="display:none"></div>
 <div class="trusted-box">
 <div class="bl-list-header">
@@ -891,7 +891,7 @@
 </div>
 </div>
 <!-- ── TOAST ── -->
-<div id="toast-zone"></div>
+<div id="toast-zone" role="status" aria-live="polite" aria-atomic="false"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="/static/dashboard.js"></script>
 </body>
