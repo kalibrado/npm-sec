@@ -18,7 +18,7 @@ def validate_ip_or_cidr(value: str, allow_cidr: bool = False) -> str:
 
 def validate_country_code(value: str) -> str:
     value = (value or "").strip().upper()
-    if len(value) != 2 or not value.isalpha():
+    if len(value) != 2 or not value.isascii() or not value.isalpha():
         raise HTTPException(status_code=400, detail="Invalid country code")
     return value
 
@@ -37,6 +37,49 @@ def validate_trusted_type(entry_type: str, value: str) -> tuple[str, str]:
             raise HTTPException(status_code=400, detail="Invalid user-agent rule")
         return entry_type, value.lower()
     raise HTTPException(status_code=400, detail="Invalid trusted entry type")
+
+
+def assert_safe_manual_block(
+    entry_type: str, value: str, conn: sqlite3.Connection
+) -> None:
+    """Prevent a rule which would break LAN access or conflict with IP trust.
+
+    GeoIP country bans remain possible; trusted IP/CIDR networks can be used
+    as explicit exceptions. For an IP block, explicit trust must be removed
+    first, because Nginx trust overrides a block and would silently negate it.
+    """
+    if entry_type not in {"ip", "cidr"}:
+        return
+
+    target = ipaddress.ip_network(value, strict=False)
+    for protected in INTERNAL_NETWORKS:
+        if target.version == protected.version and target.overlaps(protected):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Cannot block {value}: overlaps protected internal network "
+                    f"{protected}. Update INTERNAL_NETWORKS explicitly if needed."
+                ),
+            )
+
+    if entry_type == "ip":
+        rows = conn.execute(
+            "SELECT type, value FROM trusted_entries WHERE type IN ('ip', 'cidr')"
+        ).fetchall()
+        address = ipaddress.ip_address(value)
+        for row in rows:
+            try:
+                allowed = ipaddress.ip_network(row["value"], strict=False)
+            except ValueError:
+                continue
+            if address in allowed:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Cannot block {value}: trusted {row['type']} "
+                        f"{row['value']} takes precedence. Remove its trust rule first."
+                    ),
+                )
 
 
 def is_trusted_event(event: dict, conn: sqlite3.Connection | None = None) -> bool:
