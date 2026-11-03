@@ -22,12 +22,24 @@ docker inspect -f '{{.State.Running}}' "$NPM_CONTAINER" 2>/dev/null | grep -qx t
 
 # Never overwrite NPM's existing custom configuration. An administrator
 # adds the following includes once, keeping the rest of their configuration.
-docker exec "$NPM_CONTAINER" sh -c 'grep -Fq "$1" "$2"' sh \
-  "include $TARGET/npm-blocklist.conf;" "/data/nginx/custom/http_top.conf" ||
-  die "missing include in /data/nginx/custom/http_top.conf (see docs/NPM_POLICY_ENFORCEMENT.md)"
-docker exec "$NPM_CONTAINER" sh -c 'grep -Fq "$1" "$2"' sh \
-  "include $TARGET/npm-server-guard.conf;" "/data/nginx/custom/server_proxy.conf" ||
-  die "missing include in /data/nginx/custom/server_proxy.conf (see docs/NPM_POLICY_ENFORCEMENT.md)"
+# Accept either the original direct include or the Git-managed profile.
+# In managed mode both hops must exist; otherwise Nginx might silently
+# keep using stale rules even when the copy/reload succeeds.
+check_hook() {
+  local parent="$1" direct="$2" profile="$3"
+  if docker exec "$NPM_CONTAINER" grep -Fq "include $direct;" "$parent"; then
+    return 0
+  fi
+  if docker exec "$NPM_CONTAINER" grep -Fq "include $profile;" "$parent" &&
+     docker exec "$NPM_CONTAINER" grep -Fq "include $direct;" "$profile"; then
+    return 0
+  fi
+  die "missing policy include (direct or via managed profile) in $parent"
+}
+check_hook "/data/nginx/custom/http_top.conf" \
+  "$TARGET/npm-blocklist.conf" "$TARGET/http-security.conf"
+check_hook "/data/nginx/custom/server_proxy.conf" \
+  "$TARGET/npm-server-guard.conf" "$TARGET/server-security.conf"
 
 docker exec "$NPM_CONTAINER" mkdir -p "$TARGET"
 # Existing files must be present: otherwise a rollback could leave the
