@@ -145,6 +145,29 @@ Une politique `applied` ne signifie **pas** une surveillance continue de
 l'instance NPM si quelqu'un modifie le proxy en dehors du script. De même,
 une règle enregistrée en base n'est pas automatiquement un blocage effectif.
 
+## NSD : configuration sécurité gérée depuis la web UI
+
+**Architecture retenue :** NPM conserve seulement les proxys, SSL et
+routage ; NSD devient la source de vérité de la configuration sécurité.
+À terme, deux petits includes Nginx raccordent le profil compilé par NSD
+au Nginx de NPM, sans exiger que le dashboard possède le socket Docker.
+
+Le premier socle est disponible dans **Configuration → Configuration de
+sécurité NSD** : paramètres historiques typés avec défauts, validation
+côté serveur, prévisualisation des différences, historique de révisions
+immutable et restauration dans une nouvelle révision. Les paramètres
+seront progressivement étendus jusqu'à couvrir tous les réglages.
+
+**Important :** les modifications de cette interface sont actuellement
+stockées comme révisions SQLite **non appliquées**. La validation
+`nginx -t`, le reload gracieux, les preuves de déploiement et le rollback
+automatique seront livrés par l'agent hôte isolé. Aucun appel API de cette
+première étape ne modifie le NPM réel. Le script de migration statique
+dispose seulement d'un plan ; son `--apply` est bloqué jusqu'à l'agent.
+
+Voir [les choix d'architecture et le plan complet](docs/NSD_PRODUCT_ROADMAP.md)
+et [la documentation du premier socle configurable](docs/NSD_SECURITY_CONFIG_FOUNDATION.md).
+
 ## Diagnostic de collecte NPM
 
 La vue **Santé** affiche désormais un panneau de diagnostic du collecteur :

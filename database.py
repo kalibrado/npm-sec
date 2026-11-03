@@ -280,6 +280,21 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_observation_alerts_created ON observation_alerts(created_at DESC)",
         ]:
             conn.execute(idx)
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS security_profile_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                payload TEXT NOT NULL,
+                hash TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                note TEXT NOT NULL DEFAULT '',
+                parent_revision INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_security_profile_revisions_created "
+            "ON security_profile_revisions(created_at DESC)"
+        )
         admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
         if admin_count == 0:
             if DEFAULT_ADMIN_PASSWORD:

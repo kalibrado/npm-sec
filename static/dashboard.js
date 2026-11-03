@@ -441,7 +441,7 @@ function setView(v) {
   if (v==='lists') loadSecurityLists();
   if (v==='control') loadSecurityControl();
   if (v==='health') loadNpmHealth();
-  if (v==='config') { loadRuntimeConfig(); loadDetailedHealth(); loadPatch53Intel(); loadUsers(); }
+  if (v==='config') { loadRuntimeConfig(); loadDetailedHealth(); loadPatch53Intel(); loadUsers(); loadSecurityProfile(); }
 }
 document.querySelectorAll('.nav-btn, .desktop-tab').forEach(b => b.addEventListener('click',()=>setView(b.dataset.view)));
 
@@ -2594,6 +2594,188 @@ async function loadDetailedHealth() {
   } catch(e) {}
 }
 
+let nsdProfileState = null;
+
+function profileFormSettings() {
+  if (!nsdProfileState) throw new Error('Configuration non chargée');
+  const values = {};
+  for (const [key, spec] of Object.entries(nsdProfileState.schema)) {
+    const node = document.getElementById('nsd-profile-field-' + key);
+    if (!node) throw new Error('Champ manquant : ' + key);
+    if (spec.type === 'boolean') values[key] = node.checked;
+    else if (spec.type === 'integer') {
+      const value = node.value.trim();
+      values[key] = value && /^-?\d+$/.test(value) ? Number(value) : null;
+    } else if (['countries', 'cidrs', 'tokens'].includes(spec.type)) {
+      values[key] = node.value.split(',').map(part => part.trim()).filter(Boolean);
+    } else values[key] = node.value;
+  }
+  return values;
+}
+
+function renderProfileSettings(data) {
+  nsdProfileState = data;
+  const root = document.getElementById('nsd-profile-fields');
+  const status = document.getElementById('nsd-profile-deployment');
+  if (!root || !status) return;
+  document.getElementById('nsd-profile-version').textContent = 'Révision ' + data.revision;
+  status.textContent = data.deployment?.message || 'Aucune politique appliquée par l’agent.';
+  status.dataset.state = 'warning';
+  root.innerHTML = Object.entries(data.schema).map(([key, spec]) => {
+    const value = data.settings[key];
+    const id = 'nsd-profile-field-' + key;
+    const control = spec.type === 'boolean'
+      ? '<input type="checkbox" id="' + id + '"' + (value ? ' checked' : '') + '>'
+      : spec.type === 'choice'
+        ? '<select class="search" id="' + id + '">' +
+          spec.choices.map(choice => '<option value="' + esc(choice) + '"' +
+            (choice === value ? ' selected' : '') + '>' + esc(choice) + '</option>').join('') + '</select>'
+        : '<input class="search" id="' + id + '" ' +
+          (spec.type === 'integer' ? 'type="number" min="' + spec.min + '" max="' + spec.max + '"' : 'type="text"') +
+          ' value="' + esc(Array.isArray(value) ? value.join(', ') : value) + '">';
+    return '<label class="nsd-profile-field" for="' + id + '">' +
+      '<span class="nsd-profile-label">' + esc(spec.label) + '</span>' + control +
+      '<small>' + esc(spec.description) + ' <em>Défaut : ' +
+      esc(Array.isArray(spec.default) ? spec.default.join(', ') : String(spec.default)) +
+      '</em></small></label>';
+  }).join('');
+
+  const history = document.getElementById('nsd-profile-history');
+  history.innerHTML = data.history?.length ? data.history.map(row =>
+    '<div class="nsd-profile-revision">' +
+      '<span><strong>#' + Number(row.id) + '</strong> · ' + esc(row.created_by) +
+      ' · ' + esc(row.created_at) + '<small>' + esc(row.note || 'Sans motif') + '</small></span>' +
+      '<button class="page-btn" type="button" data-profile-restore="' + Number(row.id) + '"' +
+        (Number(row.id) === data.revision ? ' disabled' : '') + '>Restaurer</button>' +
+    '</div>'
+  ).join('') : 'Aucune révision enregistrée. Les valeurs héritées servent de défaut.';
+  history.querySelectorAll('[data-profile-restore]').forEach(button => {
+    button.addEventListener('click', () => void restoreProfileRevision(Number(button.dataset.profileRestore)));
+  });
+}
+
+async function loadSecurityProfile() {
+  const feedback = document.getElementById('nsd-profile-feedback');
+  try {
+    const response = await fetchJsonSafe('/security-profile');
+    renderProfileSettings(response);
+    if (feedback) {
+      feedback.textContent = 'Configuration chargée. Aucune modification Nginx effectuée.';
+      feedback.dataset.state = 'info';
+    }
+  } catch (error) {
+    if (feedback) {
+      feedback.textContent = 'Impossible de charger les paramètres NSD : ' + (error.message || 'Erreur API');
+      feedback.dataset.state = 'error';
+    }
+  }
+}
+
+async function profileApi(url, data) {
+  const response = await adminFetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const detail = result.detail || result.error || ('HTTP ' + response.status);
+    throw new Error(Array.isArray(detail) ? detail.map(d => d.msg || String(d)).join('; ') : String(detail));
+  }
+  return result;
+}
+
+async function previewSecurityProfile() {
+  if (!requireAdminClient() || !nsdProfileState) return;
+  const status = document.getElementById('nsd-profile-feedback');
+  await withBusyButton('nsd-profile-preview-btn', 'Validation…', async () => {
+    if (status) {
+      status.dataset.state = 'loading';
+      status.textContent = 'Validation des champs et génération du candidat…';
+    }
+    try {
+      const result = await profileApi('/security-profile/preview', {
+        settings: profileFormSettings()
+      });
+      const diff = document.getElementById('nsd-profile-diff');
+      if (diff) {
+        diff.textContent = Object.values(result.diff || {}).join('\n') ||
+          'Aucune différence avec la dernière révision enregistrée.';
+        document.getElementById('nsd-profile-diff-wrap').open = true;
+      }
+      if (status) {
+        status.dataset.state = 'success';
+        status.textContent = (result.changed_files?.length || 0) +
+          ' fichier(s) de profil impacté(s). Validation de schéma réussie.' +
+          ' Aucun nginx -t ni reload n’a été exécuté.';
+      }
+      toast('Prévisualisation du candidat terminée', 'success');
+    } catch (error) {
+      if (status) {
+        status.dataset.state = 'error';
+        status.textContent = error.message || 'Candidat invalide';
+      }
+      toast(error.message || 'Prévisualisation impossible', 'danger');
+    }
+  });
+}
+
+async function saveSecurityProfile(event) {
+  event.preventDefault();
+  if (!requireAdminClient() || !nsdProfileState) return;
+  const feedback = document.getElementById('nsd-profile-feedback');
+  const note = document.getElementById('nsd-profile-note').value.trim();
+  if (note.length < 5) {
+    feedback.dataset.state = 'error';
+    feedback.textContent = 'Indique un motif d’au moins 5 caractères pour la traçabilité.';
+    document.getElementById('nsd-profile-note').focus();
+    return;
+  }
+  await withBusyButton('nsd-profile-save-btn', 'Enregistrement…', async () => {
+    try {
+      const result = await profileApi('/security-profile/revisions', {
+        settings: profileFormSettings(),
+        expected_revision: nsdProfileState.revision,
+        note
+      });
+      await loadSecurityProfile();
+      document.getElementById('nsd-profile-note').value = '';
+      feedback.dataset.state = 'success';
+      feedback.textContent = 'Révision #' + result.revision +
+        ' enregistrée en SQLite. Déploiement NPM en attente, aucun reload effectué.';
+      toast('Révision enregistrée sans toucher à NPM', 'success', 5000);
+    } catch (error) {
+      feedback.dataset.state = 'error';
+      feedback.textContent = error.message || 'Enregistrement impossible';
+      toast(feedback.textContent, 'danger');
+    }
+  });
+}
+
+async function restoreProfileRevision(revision) {
+  if (!requireAdminClient() || !nsdProfileState) return;
+  if (!confirm('Restaurer les paramètres de la révision #' + revision +
+    ' dans une NOUVELLE révision ? NPM ne sera pas rechargé.')) return;
+  const feedback = document.getElementById('nsd-profile-feedback');
+  try {
+    const result = await profileApi('/security-profile/revisions/' + revision + '/restore', {
+      expected_revision: nsdProfileState.revision
+    });
+    await loadSecurityProfile();
+    feedback.dataset.state = 'success';
+    feedback.textContent = 'Révision #' + revision + ' restaurée en nouvelle révision #' +
+      result.revision + '. NPM n’a pas été modifié.';
+    toast('Nouvelle révision créée, en attente de déploiement', 'success');
+  } catch (error) {
+    feedback.dataset.state = 'error';
+    feedback.textContent = error.message || 'Restauration impossible';
+    toast(feedback.textContent, 'danger');
+  }
+}
+
+document.getElementById('nsd-profile-preview-btn')?.addEventListener('click', () => void previewSecurityProfile());
+document.getElementById('nsd-profile-form')?.addEventListener('submit', saveSecurityProfile);
+
 async function loadRuntimeConfig() {
   try {
     const d = await fetch('/config').then(r=>r.json());
@@ -2642,7 +2824,7 @@ setInterval(() => {
 const healthRefresh = document.getElementById('health-refresh');
 if (healthRefresh) healthRefresh.addEventListener('click', loadNpmHealth);
 const configRefresh = document.getElementById('config-refresh');
-if (configRefresh) configRefresh.addEventListener('click', () => { loadRuntimeConfig(); loadDetailedHealth(); });
+if (configRefresh) configRefresh.addEventListener('click', () => { loadRuntimeConfig(); loadDetailedHealth(); loadSecurityProfile(); });
 const simulateBtn = document.getElementById('simulate-autoban');
 if (simulateBtn) simulateBtn.addEventListener('click', simulateAutoban);
 
