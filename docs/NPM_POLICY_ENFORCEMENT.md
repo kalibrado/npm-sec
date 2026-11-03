@@ -123,6 +123,28 @@ La configuration globale d'adresses IP réelles `real_ip_header` / `set_real_ip_
 doit être évaluée : n'accepter les headers de proxy que de proxies en qui on a confiance.
 L'accès admin, VPN et réseaux privés doit être testé avant de bloquer un pays.
 
+## Simuler une politique avant de l'appliquer
+
+Pour tester la politique enregistrée sur un domaine sans modifier NPM :
+
+```bash
+curl -G 'http://localhost:8000/security-control/policy/preview' \
+  -H "X-Admin-Token: <token-admin>" \
+  --data-urlencode 'ip=203.0.113.20' \
+  --data-urlencode 'host=cloud.kaliorbis.fr' \
+  --data-urlencode 'country_code=CN'
+```
+
+La réponse décrit les règles IP/CIDR et pays correspondantes, les
+exceptions IP/CIDR prioritaires et la décision **prévue en base**.
+Lorsque le pays manque et qu'une règle géographique pourrait modifier
+la décision, le résultat est indéterminé. Le statut `policy` donne
+la dernière preuve de chargement des exports, pas l'état permanent
+du proxy réel.
+
+La simulation ne déclenche aucun rechargement et ne remplace jamais
+un test de connectivité depuis les réseaux/continents concernés.
+
 ## Audit du déploiement
 
 `GET /blocklist/deployment` (admin) renvoie :

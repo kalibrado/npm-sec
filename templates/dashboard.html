@@ -299,6 +299,26 @@
     </table>
   </div>
 </section>
+<section class="security-policy-preview" aria-labelledby="security-policy-preview-title">
+  <div class="security-control-eyebrow">POLICY ENGINE / SIMULATION</div>
+  <h2 id="security-policy-preview-title">Tester une règle sans bloquer</h2>
+  <p class="security-preview-description">Prévisualise une décision à partir des règles enregistrées. Ne modifie ni NPM ni la base de données.</p>
+  <form class="security-preview-form" id="security-preview-form">
+    <label>IP à tester
+      <input class="search" id="security-preview-ip" placeholder="203.0.113.20" required maxlength="45" autocomplete="off"/>
+    </label>
+    <label>Domaine cible
+      <input class="search" id="security-preview-host" placeholder="cloud.kaliorbis.fr" required maxlength="253" autocomplete="off"/>
+    </label>
+    <label>Pays (facultatif)
+      <input class="search" id="security-preview-country" placeholder="FR" maxlength="2" autocomplete="off"/>
+    </label>
+    <button class="apply-btn compact" type="submit">Simuler</button>
+  </form>
+  <div class="security-preview-result" id="security-preview-result" role="status" aria-live="polite">
+    Renseigne une IP et un domaine pour prévisualiser les règles applicables.
+  </div>
+</section>
 <div class="lists-content">
 <section class="list-card" data-list-section="blocked">
 <div class="list-card-head">

@@ -156,6 +156,25 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Simulateur de décision de politique
+
+Le centre de contrôle dispose d'une **prévisualisation sans effet de bord**.
+Saisir une IP et un domaine cible, avec un pays facultatif, permet de
+calculer la décision attendue par les règles actuellement enregistrées.
+L'API est `GET /security-control/policy/preview` (administrateur).
+
+L'aperçu affiche les règles globales ou par host qui correspondent à
+l'adresse et au pays, les exemptions IP/CIDR ou réseaux internes, ainsi
+qu'une décision `allow`, `deny` ou `unknown`. Le verdict reste
+`unknown` si une règle géographique pourrait s'appliquer et que le
+pays n'est pas fourni.
+
+**Ce n'est pas un test de requête réelle vers Nginx.** Le calcul ne
+modifie ni SQLite ni les fichiers de configuration, et n'active aucun
+blocage. Les éventuelles divergences dues à GeoIP2, au proxy amont ou
+aux règles déployées hors du dashboard doivent être vérifiées en
+conditions réelles.
+
 ## Politiques de blocage par domaine
 
 Les règles de blocage IP, CIDR et pays peuvent désormais cibler un proxy host

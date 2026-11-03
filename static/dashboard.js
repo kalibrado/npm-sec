@@ -1542,6 +1542,51 @@ async function fetchJsonSafe(url) {
   return r.json();
 }
 
+async function simulateSavedSecurityPolicy(event) {
+  event.preventDefault();
+  if (!requireAdminClient()) return;
+  const container = document.getElementById('security-preview-result');
+  const ip = document.getElementById('security-preview-ip')?.value.trim() || '';
+  const host = document.getElementById('security-preview-host')?.value.trim() || '';
+  const country = document.getElementById('security-preview-country')?.value.trim() || '';
+  if (!container || !ip || !host) return;
+
+  const params = new URLSearchParams({ip, host});
+  if (country) params.set('country_code', country);
+  container.textContent = 'Évaluation des règles enregistrées…';
+  container.dataset.decision = 'loading';
+
+  try {
+    const result = await fetchJsonSafe(`/security-control/policy/preview?${params}`);
+    const labels = {allow: 'Autorisation prévue', deny: 'Blocage prévu', unknown: 'Décision indéterminée'};
+    const decision = result.predicted_decision || 'unknown';
+    const scope = result.policy?.state || 'not_configured';
+    const rules = result.matching_block_rules || [];
+    const trusts = result.trusted_matches || [];
+    const info = rules.map(rule =>
+      `<li>${esc(rule.type)} : <strong>${esc(rule.value)}</strong> (${rule.host ? esc(rule.host) : 'Global'})</li>`
+    ).join('');
+    const exceptions = trusts.map(rule =>
+      `<li>${esc(rule.type)} : ${esc(rule.value)}</li>`
+    ).join('');
+
+    container.dataset.decision = decision;
+    container.innerHTML = `
+      <div class="security-preview-decision">${esc(labels[decision] || 'Inconnu')}</div>
+      <p>IP <strong>${esc(result.ip)}</strong> · Domaine <strong>${esc(result.host)}</strong>
+         · Pays : ${esc(result.country_code || 'non renseigné')}</p>
+      ${rules.length ? `<p>Règles correspondantes :</p><ul>${info}</ul>` : '<p>Aucune règle de refus ne correspond aux données fournies.</p>'}
+      ${trusts.length ? `<p>Exceptions de confiance prioritaires :</p><ul>${exceptions}</ul>` : ''}
+      ${result.requires_country ? '<p>Un pays manque pour déterminer si certaines règles géographiques s’appliquent.</p>' : ''}
+      <p>État du déploiement NPM : <strong>${esc(scope)}</strong>.</p>
+      <small>Simulation des règles en base. Le résultat ne vérifie pas une requête réelle auprès de Nginx.</small>
+    `;
+  } catch (error) {
+    container.dataset.decision = 'error';
+    container.textContent = error.message || 'Impossible de simuler cette politique.';
+  }
+}
+
 async function loadSecurityControlOverview() {
   const root = document.getElementById('security-control-overview');
   if (!root) return;
@@ -1954,6 +1999,8 @@ for (const id of ['suspects-hours', 'suspects-score']) {
 }
 const suspectsRefresh = document.getElementById('suspects-refresh');
 if (suspectsRefresh) suspectsRefresh.addEventListener('click', loadSecuritySuspects);
+const securityPreviewForm = document.getElementById('security-preview-form');
+if (securityPreviewForm) securityPreviewForm.addEventListener('submit', simulateSavedSecurityPolicy);
 const listsRefresh = document.getElementById('lists-refresh');
 if (listsRefresh) listsRefresh.addEventListener('click', loadSecurityLists);
 const listsBlockAdd = document.getElementById('lists-block-add');

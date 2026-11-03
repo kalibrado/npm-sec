@@ -15,6 +15,7 @@ from config import (
 )
 from database import get_db
 from services.deployment import get_policy_deployment_status
+from services.policy_preview import evaluate_saved_policy
 from services.trust import is_internal_ip
 
 router = APIRouter(tags=["security-control"], dependencies=[Depends(require_admin)])
@@ -162,3 +163,20 @@ def security_control_suspects(
         "policy_state": get_policy_deployment_status()["state"],
         "items": results,
     }
+
+
+@router.get("/security-control/policy/preview")
+def security_policy_preview(
+    ip: str = Query(..., min_length=3, max_length=45),
+    host: str = Query(..., min_length=1, max_length=253),
+    country_code: str | None = Query(default=None),
+):
+    """Explain a saved-policy decision without touching NPM or the blocklist."""
+    with get_db() as conn:
+        prediction = evaluate_saved_policy(conn, ip, host, country_code)
+    prediction["policy"] = get_policy_deployment_status()
+    prediction["warning"] = (
+        "Simulation des règles enregistrées uniquement. "
+        "Le statut Nginx réel dépend du dernier déploiement et de la configuration du proxy."
+    )
+    return prediction
