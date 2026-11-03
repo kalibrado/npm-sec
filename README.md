@@ -218,6 +218,25 @@ blocage. Les éventuelles divergences dues à GeoIP2, au proxy amont ou
 aux règles déployées hors du dashboard doivent être vérifiées en
 conditions réelles.
 
+## Préflight Nginx et GeoIP2 sans modification du proxy
+
+Pour vérifier qu'une instance NPM est configurée pour les règles par
+domaine, les logs du mode Observation et le géoblocage, exécuter sur
+l'hôte Docker :
+
+```bash
+python3 scripts/npm-sec-preflight.py --container npm
+```
+
+Le script ne fait que lire `nginx -T` et vérifier l'accès à la base
+GeoIP2 si nécessaire. Aucun Docker reload, aucun bannissement, aucun
+changement de configuration. Il détecte notamment un format de log
+qui contient les champs Observe mais qui **n'est pas utilisé** par
+l'access log actif.
+
+Résultat JSON disponible avec `--json`. Détails et limites :
+[Diagnostic NPM/GeoIP2 en lecture seule](docs/NPM_GEOIP_PREFLIGHT.md).
+
 ## Vérification réelle des décisions Nginx en CI
 
 En plus de `nginx -t`, la suite de tests lance maintenant un **Nginx local
