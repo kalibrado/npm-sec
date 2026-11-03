@@ -11,7 +11,7 @@ from pathlib import Path
 
 from config import LOG_FILE
 from database import get_db
-from services.log_parser import insert_log, parse_line
+from services.log_parser import check_alerts, insert_log, parse_line
 
 
 def _current_identity(fd) -> tuple[str, int]:
@@ -45,6 +45,15 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
                 legacy_count = conn.execute("SELECT COUNT(*) FROM access_logs").fetchone()[0]
                 offset = file_size if legacy_count else 0
                 generation = 0
+                # Persist bootstrap immediately. A crash before the first batch
+                # must never cause the next startup to skip the remainder.
+                conn.execute(
+                    """INSERT INTO ingestion_state
+                       (path, physical_id, generation, byte_offset)
+                       VALUES (?, ?, 0, ?)""",
+                    [path, physical_id, offset],
+                )
+                conn.commit()
             elif state["physical_id"] != physical_id:
                 offset, generation = 0, 0
             elif file_size < state["byte_offset"]:
@@ -91,6 +100,8 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
             )
             conn.commit()
 
+        if inserted:
+            check_alerts()
         return inserted
 
 
