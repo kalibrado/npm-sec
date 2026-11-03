@@ -1,5 +1,7 @@
 import sqlite3
 
+from config import BRUTE_FORCE_WINDOW_MIN, BRUTE_FORCE_LOGIN_THRESHOLD
+
 from  services.trust import is_internal_ip
 
 
@@ -12,6 +14,11 @@ THREAT_PATTERNS = [
 ]
 
 SCRIPT_USER_AGENTS = ["curl", "python", "go-http-client", "httpclient", "masscan", "nmap", "nikto", "sqlmap", "zgrab"]
+
+LOGIN_URI_MARKERS = ("/login", "/signin", "/auth/", "wp-login", "/session", "/oauth/token")
+SCAN_WINDOW_MIN = 2
+SCAN_UNIQUE_URI_THRESHOLD = 12
+SCAN_DENIED_THRESHOLD = 10
 
 
 def analyze_threat(event: dict, conn: sqlite3.Connection | None = None) -> dict:
@@ -57,23 +64,57 @@ def analyze_threat(event: dict, conn: sqlite3.Connection | None = None) -> dict:
         reasons.append("http_5xx")
 
     if conn is not None and ip and not is_internal_ip(ip):
+        host = event.get("host") or ""
         recent = conn.execute(
-            """
-            SELECT COUNT(*) FROM access_logs
-            WHERE ip = ? AND timestamp > datetime('now', '-1 minute')
-            """,
-            [ip],
+            """SELECT COUNT(*) FROM access_logs
+               WHERE ip=? AND host=? AND datetime(timestamp) > datetime('now','-1 minute')""",
+            [ip, host],
         ).fetchone()[0]
         if recent >= 100:
             score += 25
             reasons.append("rate_100_per_min")
-            if threat_type == "normal":
+            if threat_type in {"normal", "bot", "script"}:
                 threat_type = "rate_limit"
         elif recent >= 50:
             score += 15
             reasons.append("rate_50_per_min")
-            if threat_type == "normal":
+            if threat_type in {"normal", "bot", "script"}:
                 threat_type = "rate_limit"
+
+        # Repeated failed authentication against the same protected host.
+        # Cross-host traffic is not merged: one IP may serve many NAT users.
+        if status in (401, 403, 429) and any(x in uri for x in LOGIN_URI_MARKERS):
+            failed = conn.execute(
+                """SELECT COUNT(*) FROM access_logs
+                   WHERE ip=? AND host=? AND status IN (401,403,429)
+                     AND datetime(timestamp) > datetime('now', ?)
+                     AND (lower(uri) LIKE '%login%' OR lower(uri) LIKE '%signin%'
+                          OR lower(uri) LIKE '%auth/%' OR lower(uri) LIKE '%session%'
+                          OR lower(uri) LIKE '%oauth/token%')""",
+                [ip, host, f"-{BRUTE_FORCE_WINDOW_MIN} minutes"],
+            ).fetchone()[0]
+            if failed + 1 >= BRUTE_FORCE_LOGIN_THRESHOLD:
+                score += 60
+                reasons.append("brute_force_login_failures")
+                threat_type = "brute_force"
+
+        # Only classify an HTTP path scan when both path diversity and denied
+        # responses are high. Scanning TCP/UDP ports is out of scope for NPM logs.
+        if status in (403, 404) and threat_type != "brute_force":
+            summary = conn.execute(
+                """SELECT COUNT(DISTINCT uri) AS unique_paths,
+                          SUM(CASE WHEN status IN (403,404) THEN 1 ELSE 0 END) AS denied
+                   FROM access_logs
+                   WHERE ip=? AND host=? AND datetime(timestamp) > datetime('now', ?)""",
+                [ip, host, f"-{SCAN_WINDOW_MIN} minutes"],
+            ).fetchone()
+            distinct_paths = (summary["unique_paths"] or 0) + 1
+            denied = (summary["denied"] or 0) + 1
+            if distinct_paths >= SCAN_UNIQUE_URI_THRESHOLD and denied >= SCAN_DENIED_THRESHOLD:
+                score += 55
+                reasons.append("http_path_enumeration")
+                if threat_type in {"normal", "bot", "script", "rate_limit", "scanner"}:
+                    threat_type = "scanner"
 
     return {
         "threat": threat_type if score > 0 else "normal",
