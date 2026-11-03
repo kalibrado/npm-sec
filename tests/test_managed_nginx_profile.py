@@ -56,6 +56,12 @@ def test_migration_has_read_only_plan_and_rejects_unconfirmed_apply():
                              capture_output=True, text=True, timeout=10)
     assert refused.returncode != 0
     assert "MIGRER_NPM_SEC" in refused.stderr
+    disabled = subprocess.run(
+        [sys.executable, str(MIGRATE), "--apply", "--confirm", "MIGRER_NPM_SEC"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert disabled.returncode != 0
+    assert "Application bloquée" in disabled.stderr
     apply = (ROOT / "scripts/npm-sec-apply.sh").read_text()
     assert "check_hook" in apply
     assert '"$TARGET/http-security.conf"' in apply
