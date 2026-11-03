@@ -28,6 +28,7 @@
 <button class="desktop-tab" data-view="logs">Logs</button>
 <button class="desktop-tab" data-view="map">Carte</button>
 <button class="desktop-tab" data-view="threats">Menaces</button>
+<button class="desktop-tab" data-view="control">Centre de contrôle</button>
 <button class="desktop-tab" data-view="lists">Listes</button>
 <button class="desktop-tab" data-view="health">Santé</button>
 <button class="desktop-tab" data-view="config">Config</button>
@@ -172,6 +173,8 @@
 <button class="chip success-chip" data-f="allowed">OK</button>
 </div>
 <span class="row-count-label" id="row-count"></span>
+<button class="page-btn danger-lite admin-only" type="button" id="logs-purge-open" data-admin-only>Purger les logs</button>
+<span class="log-purge-feedback" id="log-purge-feedback" role="status" aria-live="polite"></span>
 </div>
 <div class="table-wrap">
 <table>
@@ -201,6 +204,21 @@
 <option value="200">200 / page</option>
 </select>
 </div>
+<dialog id="logs-purge-dialog" class="logs-purge-dialog" aria-labelledby="logs-purge-title">
+  <form id="logs-purge-form" novalidate>
+    <h2 id="logs-purge-title">Purger les logs enregistrés</h2>
+    <p>Supprime définitivement les logs stockés en base et leurs événements dérivés (menaces, incidents et alertes).
+    Les règles de blocage, les IP de confiance, les comptes et les journaux Nginx sur disque sont conservés.
+    La collecte des nouvelles requêtes continuera.</p>
+    <label for="logs-purge-confirm">Pour confirmer, saisissez <strong>PURGER</strong></label>
+    <input class="search" id="logs-purge-confirm" autocomplete="off" spellcheck="false" placeholder="PURGER"/>
+    <div class="log-purge-dialog-status" id="logs-purge-dialog-status" role="status" aria-live="polite"></div>
+    <div class="log-purge-actions">
+      <button class="page-btn" type="button" id="logs-purge-cancel">Annuler</button>
+      <button class="page-btn danger-lite" type="submit" id="logs-purge-submit" disabled>Supprimer définitivement</button>
+    </div>
+  </form>
+</dialog>
 </div>
 <!-- THREATS PANEL -->
 <div class="main-panel threats-panel" id="panel-threats">
@@ -230,18 +248,16 @@
 </table>
 </div>
 </div>
-<!-- SECURITY LISTS PANEL -->
-<div class="main-panel lists-panel" id="panel-lists">
-<div class="toolbar lists-toolbar">
-<div class="side-title" style="padding:0">Listes de sécurité</div>
-<div class="chip-group">
-<button class="chip active" data-list-tab="all">Tous</button>
-<button class="chip danger-chip" data-list-tab="blocked">Blocked</button>
-<button class="chip success-chip" data-list-tab="trusted">Trusted</button>
-<button class="chip" data-list-tab="history">Historique</button>
-</div>
-<button class="page-btn" id="lists-refresh">Rafraîchir</button>
-</div>
+<!-- SECURITY CONTROL CENTER PANEL -->
+<div class="main-panel security-console-panel" id="panel-control">
+  <div class="toolbar security-console-toolbar">
+    <div>
+      <div class="side-title">Centre de contrôle</div>
+      <div class="list-subtitle">Détections, observation, règles et diagnostic</div>
+    </div>
+    <button class="page-btn" type="button" id="security-control-refresh">Actualiser</button>
+  </div>
+  <div class="security-console-scroll" id="security-console-scroll" tabindex="0" aria-label="Contenu du centre de contrôle défilant">
 <section class="security-control-overview" id="security-control-overview" aria-labelledby="security-control-title">
   <div class="security-control-heading">
     <div>
@@ -365,7 +381,7 @@
   <div class="security-control-eyebrow">POLICY ENGINE / SIMULATION</div>
   <h2 id="security-policy-preview-title">Tester une règle sans bloquer</h2>
   <p class="security-preview-description">Prévisualise une décision à partir des règles enregistrées. Ne modifie ni NPM ni la base de données.</p>
-  <form class="security-preview-form" id="security-preview-form">
+  <form class="security-preview-form" id="security-preview-form" novalidate>
     <label>IP à tester
       <input class="search" id="security-preview-ip" placeholder="203.0.113.20" required maxlength="45" autocomplete="off"/>
     </label>
@@ -381,6 +397,21 @@
     Renseigne une IP et un domaine pour prévisualiser les règles applicables.
   </div>
 </section>
+
+  </div>
+</div>
+<!-- SECURITY LISTS PANEL -->
+<div class="main-panel lists-panel" id="panel-lists">
+<div class="toolbar lists-toolbar">
+<div class="side-title" style="padding:0">Listes de sécurité</div>
+<div class="chip-group">
+<button class="chip active" data-list-tab="all">Tous</button>
+<button class="chip danger-chip" data-list-tab="blocked">Blocked</button>
+<button class="chip success-chip" data-list-tab="trusted">Trusted</button>
+<button class="chip" data-list-tab="history">Historique</button>
+</div>
+<button class="page-btn" id="lists-refresh">Rafraîchir</button>
+</div>
 <div class="lists-content">
 <section class="list-card" data-list-section="blocked">
 <div class="list-card-head">
@@ -403,6 +434,7 @@
 <option value="43200">30 jours</option>
 </select>
 <button class="apply-btn compact" id="lists-block-add">+ Bloquer</button>
+<div class="security-inline-feedback" id="lists-block-feedback" role="status" aria-live="polite"></div>
 </div>
 <div class="list-table-wrap">
 <table class="compact-table">
@@ -433,6 +465,7 @@
 <input class="search" id="lists-trusted-input" placeholder="IP, CIDR, pays ou UA:Nextcloud"/>
 <input class="search" id="lists-trusted-reason" placeholder="Raison"/>
 <button class="apply-btn compact" id="lists-trusted-add">+ Trust</button>
+<div class="security-inline-feedback" id="lists-trusted-feedback" role="status" aria-live="polite"></div>
 </div>
 <div class="list-table-wrap">
 <table class="compact-table">
@@ -752,8 +785,8 @@
 <button class="nav-btn" data-view="threats">
 <span class="nav-ico">⚠</span><span>Menaces</span>
 </button>
-<button class="nav-btn" data-view="lists">
-<span class="nav-ico">☰</span><span>Listes</span>
+<button class="nav-btn" data-view="control">
+<span class="nav-ico">🛡</span><span>Contrôle</span>
 </button>
 <button class="nav-btn" data-view="more">
 <span class="nav-ico">•••</span><span>Plus</span>
@@ -771,6 +804,7 @@
 <button class="more-item" data-more-view="map"><span>🗺</span><strong>Carte</strong><small>trafic
           géo</small></button>
 <button class="more-item" data-more-view="stats"><span>📊</span><strong>Stats</strong><small>graphiques</small></button>
+<button class="more-item" data-more-view="lists"><span>☰</span><strong>Listes</strong><small>blocages &amp; confiance</small></button>
 <button class="more-item" data-more-view="health"><span>❤</span><strong>Santé</strong><small>erreurs
           NPM</small></button>
 <button class="more-item" data-more-view="config"><span>⚙</span><strong>Config</strong><small>runtime</small></button>
@@ -814,6 +848,7 @@
 <input class="search" id="bl-host" placeholder="Domaine (vide = tous les domaines)" style="margin-top:8px" aria-label="Domaine cible facultatif"/>
 <input class="search" id="bl-reason" placeholder="Raison (optionnel)" style="margin-top:8px"/>
 <button class="apply-btn" id="bl-add" style="margin-top:8px">+ Ajouter à la blocklist</button>
+<div class="security-inline-feedback" id="bl-form-feedback" role="status" aria-live="polite"></div>
 </div>
 <div class="bl-tools">
 <button class="page-btn" id="bl-export-json">Export JSON</button>
@@ -833,6 +868,7 @@
 <input class="search" id="trusted-input" placeholder="IP, CIDR, pays ou UA:Nextcloud"/>
 <input class="search" id="trusted-reason" placeholder="Raison whitelist (optionnel)" style="margin-top:8px"/>
 <button class="apply-btn" id="trusted-add" style="margin-top:8px">+ Ajouter à la whitelist</button>
+<div class="security-inline-feedback" id="trusted-form-feedback" role="status" aria-live="polite"></div>
 </div>
 <div id="trusted-list"></div>
 </div>
