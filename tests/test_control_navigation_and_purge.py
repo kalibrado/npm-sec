@@ -131,10 +131,18 @@ def test_purge_removes_derived_logs_but_not_policies_or_cursor(client, tmp_path)
         assert count(table) == 0
 
     for table in (
-        "blocklist", "trusted_entries", "policy_modes", "ban_events",
+        "blocklist", "trusted_entries", "policy_modes",
         "ingestion_state", "users", "sessions",
     ):
         assert count(table) == 1, table
+    assert count("ban_events") == 2
+    with database.get_db() as conn:
+        purge_audit = conn.execute(
+            "SELECT action, reason FROM ban_events WHERE action='PURGE_LOGS'"
+        ).fetchone()
+        assert purge_audit is not None
+        assert "admin" in purge_audit["reason"]
+        assert "2 logs" in purge_audit["reason"]
     with database.get_db() as conn:
         state = conn.execute(
             "SELECT physical_id, generation, byte_offset FROM ingestion_state"
