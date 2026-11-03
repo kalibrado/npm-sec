@@ -22,7 +22,7 @@ def _metric_line(name: str, value, labels: dict | None = None) -> str:
     return f"{name} {value}"
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_admin)])
 def prometheus_metrics():
     if not PROMETHEUS_METRICS_ENABLED:
         raise HTTPException(status_code=404, detail="Metrics disabled")

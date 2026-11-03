@@ -47,8 +47,7 @@ def _path_writable(path: Path) -> bool:
         return False
 
 
-@router.get("/health")
-def health():
+def _health_details():
     db_ok = False
     db_size = 0
     try:
@@ -88,6 +87,17 @@ def health():
         "auth_mode": "session",
         "discord_configured": bool(DISCORD_WEBHOOK_URL),
     }
+
+
+@router.get("/health")
+def health():
+    details = _health_details()
+    return {"status": details["status"], "version": APP_VERSION}
+
+
+@router.get("/health/details", dependencies=[Depends(require_admin)])
+def health_details():
+    return _health_details()
 
 
 @router.get("/version")

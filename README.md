@@ -11,6 +11,8 @@ cp .env.example .env
 make secrets
 nano .env
 make init
+# Si make init indique un problème de permissions :
+# sudo chown -R 10001:0 data
 make build
 make up
 make logs
@@ -81,6 +83,14 @@ BASE_URL=http://localhost:8000 ADMIN_TOKEN=<token> ./scripts/smoke-test.sh
 ```
 
 Le `ADMIN_TOKEN` reste accepté pour les scripts/API, même si l'UI utilise les sessions web.
+
+## Authentification des API
+
+Les endpoints contenant des logs, des profils IP, des statistiques détaillées, des règles et des métriques exigent désormais une session authentifiée ou le header `X-Admin-Token`. Cela inclut `/events`, `/stats`, `/history`, `/widget` et `/metrics`. Un widget Homepage ou Prometheus doit donc être configuré avec un accès de service approprié ; les accès publics anonymes ne fonctionnent plus.
+
+`/health` renvoie seulement `status` et `version` pour le healthcheck. Les détails internes sont sous `/health/details` (admin).
+
+Avec `APP_ENV=production`, un `SESSION_SECRET` robuste (32 caractères minimum) est obligatoire. L'initialisation d'un premier admin exige `DEFAULT_ADMIN_PASSWORD`, sans mot de passe de repli. Les variables de `.env.example` sont alignées sur les volumes Docker : `/data` et `/logs`.
 
 ## Reverse proxy NPM
 

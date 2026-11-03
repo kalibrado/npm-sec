@@ -32,9 +32,9 @@ post_admin() {
 
 check_public /version
 check_public /health
-check_public /stats
-check_public '/history?limit=1'
-check_public /widget
+check_admin /stats
+check_admin '/history?limit=1'
+check_admin /widget
 check_admin /config
 check_admin /npm-health
 check_admin /metrics

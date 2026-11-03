@@ -3,7 +3,9 @@ import time
 import urllib.request
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from auth_deps import require_viewer
 from fastapi.responses import StreamingResponse
 
 from config import WHOIS_CACHE_TTL_DAYS
@@ -12,7 +14,7 @@ from services.log_parser import sse_generator
 from services.stats_cache import get_stats_cache, STATS_CACHE_TTL
 from services.trust import validate_ip_or_cidr
 
-router = APIRouter(tags=["logs"])
+router = APIRouter(tags=["logs"], dependencies=[Depends(require_viewer)])
 stats_cache = get_stats_cache()
 
 

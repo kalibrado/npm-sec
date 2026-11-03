@@ -1,11 +1,13 @@
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+
+from auth_deps import require_viewer
 
 from  config import APP_VERSION
 from  database import get_db
 from  services.trust import is_trusted_event, validate_ip_or_cidr
 
-router = APIRouter(tags=["widget"])
+router = APIRouter(tags=["widget"], dependencies=[Depends(require_viewer)])
 
 
 @router.get("/widget")
