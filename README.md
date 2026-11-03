@@ -145,6 +145,20 @@ Une politique `applied` ne signifie **pas** une surveillance continue de
 l'instance NPM si quelqu'un modifie le proxy en dehors du script. De même,
 une règle enregistrée en base n'est pas automatiquement un blocage effectif.
 
+## Diagnostic de collecte NPM
+
+La vue **Santé** affiche désormais un panneau de diagnostic du collecteur :
+fichier de logs attendu et permissions, dernier cycle de lecture, curseur
+SQLite et octets en attente, fichiers tournants, lignes JSON rejetées et
+variables d'Observation présentes ou absentes parmi les événements récents.
+
+L'API administrateur `GET /health/ingestion` est en **lecture seule** :
+aucune ligne brute, adresse IP ou URI n'est divulguée. Les compteurs
+de traitement sont remis à zéro au redémarrage ; le curseur SQLite
+persiste pour éviter de rejouer les événements.
+
+[Guide de dépannage de l'ingestion Nginx](docs/NPM_LOG_INGESTION_DIAGNOSTICS.md).
+
 ## Ingestion continue des logs (branche dev)
 
 La collecte ne dépend plus d'un navigateur ouvert : un ingesteur serveur unique lit le fichier NPM, mémorise sa position en SQLite et tolère les rotations/troncatures observées. Le SSE (`/events`) est désormais un flux **lecture seule** avec reprise par `since_id`. Les insertions portent une clé d'origine unique pour éviter les doublons après crash.
