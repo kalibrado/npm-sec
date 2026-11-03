@@ -1583,7 +1583,7 @@ async function loadSecurityLists() {
     applyListTab(currentListTab);
   } catch (e) {
     blockedBody.innerHTML = emptyRow(6, '⚠️', 'Erreur de chargement des listes');
-    trustedBody.innerHTML = emptyRow(6, '⚠️', 'Erreur de chargement des listes');
+    trustedBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement des listes');
     historyBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement de l’historique');
   } finally {
     securityListsLoading = false;
