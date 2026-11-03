@@ -5253,3 +5253,52 @@ button[aria-busy="true"] {
   }
   .desktop-tab { flex: 0 0 auto; }
 }
+
+
+/* Read-only Nginx log collector diagnostics in the Health view. */
+body[data-view="health"] #panel-health [data-health-card="ingestion"] {
+  grid-column: 1 / -1;
+  min-width: 0;
+  align-self: start;
+  height: auto;
+}
+.ingestion-health-content {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.ingestion-health-content > .page-btn {
+  align-self: flex-start;
+}
+#ingestion-health-status[data-state="ok"] { color: var(--success); }
+#ingestion-health-status[data-state="warning"] { color: var(--warning); }
+#ingestion-health-status[data-state="error"] { color: var(--danger); }
+#ingestion-health-advice {
+  border-left: 3px solid var(--border2);
+  background: var(--surface2);
+  border-radius: 7px;
+  padding: 11px 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#ingestion-health-advice[data-state="ok"] { border-left-color: var(--success); }
+#ingestion-health-advice[data-state="warning"] { border-left-color: var(--warning); }
+#ingestion-health-advice[data-state="error"] { border-left-color: var(--danger); }
+.ingestion-health-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px,1fr));
+  gap: 9px;
+}
+.ingestion-health-note {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+@media(max-width:650px) {
+  .ingestion-health-content { padding: 10px; }
+  .ingestion-health-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}

@@ -12,6 +12,7 @@ from pathlib import Path
 from config import LOG_FILE
 from database import get_db
 from services.log_parser import check_alerts, insert_log, parse_line
+from services.ingestion_diagnostics import record_cycle, record_failure
 
 
 def _current_identity(fd) -> tuple[str, int]:
@@ -31,6 +32,7 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
     try:
         handle = open(log_file, "rb")
     except FileNotFoundError:
+        record_cycle(log_file, missing=True)
         return 0
 
     with handle:
@@ -66,6 +68,8 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
         handle.seek(offset)
         processed = 0
         inserted = 0
+        invalid = 0
+        duplicates = 0
         # Checkpoint after each batch. Unique source_id + source_offset
         # deduplicates replays following a crash before checkpoint.
         while processed < max(1, batch_size):
@@ -80,11 +84,14 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
             processed += 1
             event = parse_line(raw.decode("utf-8", errors="replace"))
             if event is None:
+                invalid += 1
                 continue
             event["source_id"] = source_id
             event["source_offset"] = position
             result = insert_log(event)
-            if not result.get("duplicate"):
+            if result.get("duplicate"):
+                duplicates += 1
+            else:
                 inserted += 1
 
         with get_db() as conn:
@@ -100,6 +107,10 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
             )
             conn.commit()
 
+        record_cycle(
+            log_file, read=processed, inserted=inserted,
+            invalid=invalid, duplicate=duplicates,
+        )
         if inserted:
             check_alerts()
         return inserted
@@ -117,5 +128,6 @@ async def ingest_forever(poll_interval: float = 0.3):
             raise
         except Exception as exc:
             # Keep the process alive during log rotation / missing mounts.
-            print(f"[ingestion] error: {exc}")
+            record_failure(LOG_FILE, exc)
+            print(f"[ingestion] error: {type(exc).__name__}")
         await asyncio.sleep(poll_interval)

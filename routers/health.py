@@ -31,6 +31,7 @@ from config import (
     ALLOWED_ORIGINS,
 )
 from database import get_db
+from services.ingestion_diagnostics import get_ingestion_diagnostics
 from scheduler import scheduler
 
 router = APIRouter(tags=["health"])
@@ -146,6 +147,12 @@ def runtime_config():
         "brute_force_window_min": BRUTE_FORCE_WINDOW_MIN,
         "brute_force_login_threshold": BRUTE_FORCE_LOGIN_THRESHOLD,
     }
+
+
+@router.get("/health/ingestion", dependencies=[Depends(require_admin)])
+def ingestion_health():
+    """Authenticated, non-destructive state of the NPM access-log collector."""
+    return get_ingestion_diagnostics()
 
 
 @router.get("/npm-health", dependencies=[Depends(require_admin)])
