@@ -1,3 +1,4 @@
+from services.security_rules import active_rules
 from fastapi import APIRouter, Depends, HTTPException, Query
 from datetime import datetime, timedelta, timezone
 from fastapi.responses import HTMLResponse
@@ -26,7 +27,7 @@ def _expires_at(duration_minutes: int | None) -> str | None:
 def _sync_exports(conn):
     items = get_blocklist_items(conn)
     trusted_items = get_trusted_items(conn)
-    return write_blocklist_exports(items, trusted_items, get_policy_modes(conn))
+    return write_blocklist_exports(items, trusted_items, get_policy_modes(conn), active_rules(conn))
 
 
 @router.get("/trusted", dependencies=[Depends(require_admin)])
@@ -227,7 +228,8 @@ def export_blocklist_nginx():
         items = get_blocklist_items(conn)
         trusted_items = get_trusted_items(conn)
         policy_modes = get_policy_modes(conn)
-    return HTMLResponse(render_nginx_blocklist(items, trusted_items, policy_modes), media_type="text/plain")
+        extended = active_rules(conn)
+    return HTMLResponse(render_nginx_blocklist(items, trusted_items, policy_modes, extended), media_type="text/plain")
 
 
 @router.post("/blocklist/export/apply", dependencies=[Depends(require_admin)])
