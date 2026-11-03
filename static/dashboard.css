@@ -5104,3 +5104,139 @@ body[data-role="viewer"] .admin-only {
   .observation-metrics > div { padding: 10px; }
   .observation-metrics strong { font-size: 20px; }
 }
+
+
+/* Control center is a real independent page with its own scroll container. */
+body:not([data-view="control"]) #panel-control {
+  display: none !important;
+}
+body[data-view="control"] .map-section,
+body[data-view="control"] .sidebar {
+  display: none !important;
+}
+body[data-view="control"] .layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
+}
+body[data-view="control"] .layout > :not(#panel-control) {
+  display: none !important;
+}
+body[data-view="control"] #panel-control {
+  display: flex !important;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+#panel-control .security-console-toolbar {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+#panel-control .security-console-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding: 2px 0 max(32px, env(safe-area-inset-bottom));
+}
+#panel-control .security-console-scroll > section {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+#panel-control .security-control-overview {
+  margin-top: 12px;
+}
+
+.security-inline-feedback,
+.log-purge-feedback {
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.security-inline-feedback:not(:empty) { margin-top: 7px; }
+.security-inline-feedback[data-state="error"],
+.log-purge-feedback[data-state="error"] { color: var(--danger); }
+.security-inline-feedback[data-state="success"],
+.log-purge-feedback[data-state="success"] { color: var(--success); }
+.security-inline-feedback[data-state="loading"],
+.log-purge-feedback[data-state="loading"] { color: var(--accent); }
+.search[aria-invalid="true"] {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 1px var(--danger);
+}
+button[aria-busy="true"] {
+  cursor: progress;
+  opacity: .75;
+}
+.logs-purge-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(480px, calc(100vw - 24px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 24px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 15px 60px rgba(0,0,0,.5);
+  z-index: 500;
+}
+.logs-purge-dialog::backdrop {
+  background: rgba(0,0,0,.72);
+  backdrop-filter: blur(3px);
+}
+.logs-purge-dialog h2 {
+  font-size: 19px;
+  margin-bottom: 12px;
+}
+.logs-purge-dialog p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.logs-purge-dialog label {
+  display: block;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.logs-purge-dialog .search {
+  width: 100%;
+}
+.log-purge-dialog-status {
+  min-height: 24px;
+  margin-top: 8px;
+  color: var(--danger);
+}
+.log-purge-dialog-status[data-state="loading"] { color: var(--accent); }
+.log-purge-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.log-purge-actions .danger-lite:not(:disabled) {
+  border-color: var(--danger);
+}
+@media (max-width: 899px) {
+  #panel-control .security-console-toolbar { padding: 10px; }
+  #panel-control .security-console-scroll {
+    padding-bottom: calc(var(--bottomnav-h) + 18px + env(safe-area-inset-bottom));
+  }
+  #panel-control .security-console-scroll > section { margin-left: 8px; margin-right: 8px; }
+  .log-purge-feedback { width: 100%; }
+}
