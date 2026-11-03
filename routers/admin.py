@@ -151,6 +151,7 @@ def cleanup_database(days: int = None):
 def purge_saved_logs(
     payload: dict,
     confirmation: str = Header(default="", alias="X-Purge-Confirmation"),
+    user: dict = Depends(require_admin),
 ):
     """Erase stored traffic and derived findings, not NPM's source log file.
 
@@ -178,6 +179,16 @@ def purge_saved_logs(
             conn.execute("BEGIN IMMEDIATE")
             for table in tables:
                 deleted[table] = conn.execute(f"DELETE FROM {table}").rowcount
+            conn.execute(
+                """INSERT INTO ban_events(target, type, action, reason)
+                   VALUES ('access_logs', 'system', 'PURGE_LOGS', ?)""",
+                (
+                    f"Admin {user.get('username', 'unknown')}: "
+                    f"{deleted['access_logs']} logs, "
+                    f"{deleted['threat_events']} detections, "
+                    f"{deleted['observation_incidents']} incidents purged",
+                ),
+            )
             conn.commit()
         except Exception:
             conn.rollback()
