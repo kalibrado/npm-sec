@@ -137,6 +137,34 @@ FIELDS = {
         "description": "Ajoute nosniff et Referrer-Policy. À tester avec les applications proxifiées.",
     },
 }
+GROUPS = {
+    "Débit et limitation": (
+        "rate_limit_rps", "rate_limit_burst", "rate_limit_enabled",
+        "rate_limit_status",
+    ),
+    "Pays, GeoIP2 et IP réelle": (
+        "allowed_countries", "local_allowed_networks",
+        "legacy_country_filter_enabled", "geoip_auto_reload_hours",
+        "real_ip_header", "trusted_proxy_networks",
+    ),
+    "Bots, chemins et refus": (
+        "scanner_user_agents", "scanner_rules_enabled",
+        "block_empty_user_agent", "sensitive_path_protection_enabled",
+        "legacy_refusal_status",
+    ),
+    "Journalisation": (
+        "log_exclude_networks", "log_internal_requests",
+    ),
+    "Proxy, erreurs et en-têtes": (
+        "custom_error_pages_enabled", "proxy_buffering_enabled",
+        "proxy_intercept_errors_enabled", "debug_geo_headers_enabled",
+        "security_response_headers_enabled",
+    ),
+}
+for group_name, keys in GROUPS.items():
+    for key in keys:
+        FIELDS[key]["group"] = group_name
+
 DEFAULTS = {key: field["default"] for key, field in FIELDS.items()}
 
 
