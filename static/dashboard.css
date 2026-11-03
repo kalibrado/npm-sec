@@ -4978,3 +4978,52 @@ body[data-role="viewer"] .admin-only {
   .security-preview-form label { flex-basis: 100%; }
   .security-preview-form button { width: 100%; }
 }
+
+
+/* Per-host enforcement mode is an explicit pending Nginx configuration. */
+.security-policy-modes {
+  margin: 0 18px 16px;
+  padding: 18px;
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  background: var(--surface2);
+}
+.security-policy-modes h2 { margin: 6px 0; font-size: 18px; }
+.security-modes-warning {
+  padding: 9px 12px;
+  background: var(--surface3);
+  border-left: 3px solid var(--warning);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+.security-modes-status {
+  font-size: 12px;
+  font-weight: 650;
+  padding: 9px 0;
+}
+.security-modes-status[data-state="pending"] { color: var(--warning); }
+.security-modes-status[data-state="applied"] { color: var(--success); }
+.security-modes-status[data-state="error"] { color: var(--danger); }
+.security-modes-list {
+  display: grid;
+  gap: 6px;
+}
+.security-mode-item {
+  background: var(--surface);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.security-mode-item button { flex-shrink: 0; }
+.security-mode-empty { color: var(--muted); font-size: 11px; }
+@media (max-width: 600px) {
+  .security-policy-modes { margin: 0 8px 12px; padding: 12px; }
+  .security-mode-item { flex-wrap: wrap; }
+}
