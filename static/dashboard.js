@@ -1271,12 +1271,13 @@ async function loadMapHistory() {
 // ═══════════════════════════════════════════════════════════
 function connectSSE() {
   let retryDelay = 1000;
+  let lastEventId = null;
   const MAX_DELAY = 60000;
 
   function connect() {
     const dot  = document.getElementById('conn-dot');
     const text = document.getElementById('conn-text');
-    const src  = new EventSource('/events');
+    const src  = new EventSource('/events' + (lastEventId !== null ? `?since_id=${lastEventId}` : ''));
 
     src.onopen = ()=>{
       dot.className=''; text.textContent='Connecté';
@@ -1285,6 +1286,7 @@ function connectSSE() {
     };
 
     src.onmessage = e=>{
+      if (e.lastEventId) lastEventId = Number(e.lastEventId);
       const log = JSON.parse(e.data);
       retryDelay = 1000;
 

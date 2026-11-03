@@ -46,21 +46,26 @@ def parse_line(line: str) -> dict | None:
 
 
 def insert_log(event: dict) -> dict:
+    event.setdefault('source_id', None)
+    event.setdefault('source_offset', None)
     with get_db() as conn:
         threat = analyze_threat(event, conn)
         event.update(threat)
         cur = conn.execute(
             """
-            INSERT INTO access_logs
+            INSERT OR IGNORE INTO access_logs
                 (timestamp, ip, country_code, country_name, city, isp, asn, method, referer,
-                 host, user_agent, uri, status, blocked, ua, latitude, longitude, request_time, threat)
+                 host, user_agent, uri, status, blocked, ua, latitude, longitude, request_time, threat, source_id, source_offset)
             VALUES
                 (:timestamp, :ip, :country_code, :country_name, :city, :isp, :asn, :method,
                  :referer, :host, :user_agent, :uri, :status, :blocked, :ua,
-                 :latitude, :longitude, :request_time, :threat)
+                 :latitude, :longitude, :request_time, :threat, :source_id, :source_offset)
         """,
             event,
         )
+        if cur.rowcount == 0:
+            event['duplicate'] = True
+            return event
         access_log_id = cur.lastrowid
         event["id"] = access_log_id
 
@@ -192,11 +197,35 @@ async def tail_log():
             f.close()
 
 
-async def sse_generator():
-    async for line in tail_log():
-        event = parse_line(line)
-        if not event:
-            continue
-        event = insert_log(event)
-        check_alerts()
-        yield f"data: {json.dumps(event)}\n\n"
+async def sse_generator(since_id: int | None = None):
+    """Read-only event stream. The background ingester owns all DB writes."""
+    if since_id is None:
+        with get_db() as conn:
+            since_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM access_logs").fetchone()[0]
+    idle_polls = 0
+    while True:
+        with get_db() as conn:
+            rows = conn.execute(
+                """SELECT al.*, te.score AS threat_score, te.reasons AS threat_reasons
+                   FROM access_logs al
+                   LEFT JOIN threat_events te ON te.access_log_id = al.id
+                   WHERE al.id > ? ORDER BY al.id ASC LIMIT 200""",
+                [since_id],
+            ).fetchall()
+        for row in rows:
+            event = dict(row)
+            since_id = event["id"]
+            try:
+                event["threat_reasons"] = json.loads(event.get("threat_reasons") or "[]")
+            except (TypeError, ValueError):
+                event["threat_reasons"] = []
+            yield f"id: {since_id}\\ndata: {json.dumps(event)}\\n\\n"
+        if rows:
+            idle_polls = 0
+            await asyncio.sleep(0)
+        else:
+            idle_polls += 1
+            if idle_polls >= 15:
+                yield ": keepalive\\n\\n"
+                idle_polls = 0
+            await asyncio.sleep(1)

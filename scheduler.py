@@ -2,6 +2,7 @@ import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from  services.log_parser import cleanup_task
+from services.ingestion import ingest_forever
 from  services.reports import generate_and_send_monthly_report
 
 scheduler = AsyncIOScheduler()
@@ -24,4 +25,5 @@ def setup_report_scheduler():
 
 def start_background_tasks():
     asyncio.create_task(cleanup_task())
+    asyncio.create_task(ingest_forever())
     setup_report_scheduler()

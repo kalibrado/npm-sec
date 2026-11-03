@@ -153,6 +153,27 @@ def init_db():
             )
         """
         )
+        # Upgrade older databases in place, without losing historical traffic.
+        access_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(access_logs)")
+        }
+        if "source_id" not in access_columns:
+            conn.execute("ALTER TABLE access_logs ADD COLUMN source_id TEXT")
+        if "source_offset" not in access_columns:
+            conn.execute("ALTER TABLE access_logs ADD COLUMN source_offset INTEGER")
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS ingestion_state (
+                path TEXT PRIMARY KEY,
+                physical_id TEXT NOT NULL,
+                generation INTEGER NOT NULL DEFAULT 0,
+                byte_offset INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_access_source_offset "
+            "ON access_logs(source_id, source_offset)"
+        )
         for idx in [
             "CREATE INDEX IF NOT EXISTS idx_timestamp  ON access_logs(timestamp DESC)",
             "CREATE INDEX IF NOT EXISTS idx_id         ON access_logs(id DESC)",

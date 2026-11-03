@@ -11,7 +11,6 @@ from  routers import admin, auth, blocklist, health, logs, threats
 from  database import init_db
 from  routers import widget
 from  scheduler import start_background_tasks
-from  services.log_parser import import_existing_logs
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR =  BASE_DIR / "templates"
@@ -49,7 +48,6 @@ async def startup():
         raise RuntimeError(f"Template manquant: {TEMPLATES_DIR / DASHBOARD_TEMPLATE}")
     validate_runtime_config()
     init_db()
-    import_existing_logs()
     start_background_tasks()
 
 
