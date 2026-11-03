@@ -35,6 +35,15 @@ def parse_line(line: str) -> dict | None:
             policy_mode, would_deny = None, None
         else:
             would_deny = int(flag)
+        def parsed_rule_id(raw):
+            if isinstance(raw, bool):
+                return None
+            if isinstance(raw, int):
+                return raw if 0 < raw < 1_000_000_000 else None
+            if isinstance(raw, str) and raw.isascii() and raw.isdecimal() and len(raw) <= 9:
+                number = int(raw)
+                return number if number > 0 else None
+            return None
         # if is_internal_ip(ip):
         #     return None
         return {
@@ -54,6 +63,9 @@ def parse_line(line: str) -> dict | None:
             "blocked": 1 if data.get("allowed", "yes") == "no" else 0,
             "policy_mode": policy_mode,
             "would_deny": would_deny,
+            "rule_path_id": parsed_rule_id(data.get("nsd_rule_path_id")),
+            "rule_ua_id": parsed_rule_id(data.get("nsd_rule_ua_id")),
+            "rule_method_id": parsed_rule_id(data.get("nsd_rule_method_id")),
             "ua": data.get("http_user_agent", ""),
             "latitude": float(data.get("latitude", 0) or 0),
             "longitude": float(data.get("longitude", 0) or 0),
@@ -69,6 +81,8 @@ def insert_log(event: dict) -> dict:
     event.setdefault('source_offset', None)
     event.setdefault('policy_mode', None)
     event.setdefault('would_deny', None)
+    for key in ('rule_path_id', 'rule_ua_id', 'rule_method_id'):
+        event.setdefault(key, None)
     with get_db() as conn:
         threat = analyze_threat(event, conn)
         event.update(threat)
@@ -77,12 +91,14 @@ def insert_log(event: dict) -> dict:
             INSERT OR IGNORE INTO access_logs
                 (timestamp, ip, country_code, country_name, city, isp, asn, method, referer,
                  host, user_agent, uri, status, blocked, ua, latitude, longitude, request_time, threat,
-                 policy_mode, would_deny, source_id, source_offset)
+                 policy_mode, would_deny, source_id, source_offset,
+                 rule_path_id, rule_ua_id, rule_method_id)
             VALUES
                 (:timestamp, :ip, :country_code, :country_name, :city, :isp, :asn, :method,
                  :referer, :host, :user_agent, :uri, :status, :blocked, :ua,
                  :latitude, :longitude, :request_time, :threat,
-                 :policy_mode, :would_deny, :source_id, :source_offset)
+                 :policy_mode, :would_deny, :source_id, :source_offset,
+                 :rule_path_id, :rule_ua_id, :rule_method_id)
         """,
             event,
         )
@@ -91,6 +107,20 @@ def insert_log(event: dict) -> dict:
             return event
         access_log_id = cur.lastrowid
         event["id"] = access_log_id
+
+        # These counters count matches, including Observe/trusted requests,
+        # NOT confirmed 403 blocks. Increment only after a new log insertion.
+        matched = {
+            rule_id for rule_id in (
+                event.get("rule_path_id"), event.get("rule_ua_id"),
+                event.get("rule_method_id")
+            ) if type(rule_id) is int and rule_id > 0
+        }
+        for rule_id in matched:
+            conn.execute(
+                "UPDATE security_rules SET match_count=match_count+1 WHERE id=?",
+                (rule_id,),
+            )
 
         if event.get("threat_score", 0) > 0:
             cur_threat = conn.execute(
