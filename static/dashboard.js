@@ -1496,6 +1496,90 @@ async function loadBanEvents() {
   }
 }
 
+function initLogPurge() {
+  const dialog = document.getElementById('logs-purge-dialog');
+  const opener = document.getElementById('logs-purge-open');
+  const input = document.getElementById('logs-purge-confirm');
+  const submit = document.getElementById('logs-purge-submit');
+  const cancel = document.getElementById('logs-purge-cancel');
+  const form = document.getElementById('logs-purge-form');
+  const status = document.getElementById('logs-purge-dialog-status');
+  if (!dialog || !opener || !input || !submit || !cancel || !form || !status) return;
+
+  opener.addEventListener('click', () => {
+    if (!requireAdminClient()) return;
+    if (typeof dialog.showModal !== 'function') {
+      toast('La confirmation de purge n’est pas prise en charge par ce navigateur.', 'danger');
+      return;
+    }
+    input.value = '';
+    submit.disabled = true;
+    status.textContent = '';
+    status.dataset.state = '';
+    dialog.showModal();
+    input.focus();
+  });
+
+  input.addEventListener('input', () => {
+    submit.disabled = input.value !== 'PURGER';
+    if (status.dataset.state === 'error') status.textContent = '';
+  });
+  cancel.addEventListener('click', () => {
+    if (submit.getAttribute('aria-busy') === 'true') return;
+    dialog.close();
+  });
+  dialog.addEventListener('cancel', event => {
+    if (submit.getAttribute('aria-busy') === 'true') event.preventDefault();
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!requireAdminClient()) return;
+    if (input.value !== 'PURGER') {
+      status.dataset.state = 'error';
+      status.textContent = 'Saisis exactement PURGER pour confirmer la suppression.';
+      toast(status.textContent, 'warning');
+      input.focus();
+      return;
+    }
+    await withBusyButton('logs-purge-submit', 'Suppression…', async () => {
+      status.dataset.state = 'loading';
+      status.textContent = 'Purge des logs et événements dérivés en cours…';
+      try {
+        const r = await adminFetch('/db/purge-logs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Purge-Confirmation': 'PURGER'
+          },
+          body: JSON.stringify({confirmation: 'PURGER'})
+        });
+        const data = await r.json();
+        if (!r.ok || data.status !== 'ok') throw new Error(apiErrorMessage(data, 'Purge refusée'));
+        const count = Number(data.deleted?.access_logs || 0);
+        const message = `Purge terminée : ${count.toLocaleString('fr-FR')} logs supprimés. Règles et collecteur préservés.`;
+        const feedback = document.getElementById('log-purge-feedback');
+        if (feedback) {
+          feedback.textContent = message;
+          feedback.dataset.state = 'success';
+        }
+        dialog.close();
+        toast(message, 'success', 6500);
+        void loadStats(true);
+        void loadPage('first');
+        void loadTimeline();
+        void loadHeatmap();
+        if (document.body.dataset.view === 'control') void loadSecurityControl();
+      } catch (error) {
+        status.dataset.state = 'error';
+        status.textContent = error.message || 'Purge impossible : aucun changement confirmé.';
+        toast(status.textContent, 'danger', 6000);
+      }
+    });
+  });
+}
+
+initLogPurge();
+
 function openExport(kind) {
   if (!requireAdminClient()) return;
   const url = kind === 'nginx' ? '/blocklist/export/nginx' : '/blocklist/export/json';
@@ -1581,7 +1665,9 @@ async function addTrusted() {
     else if (raw.includes('/')) type = 'cidr';
     else if (/^[A-Za-z]{2}$/.test(raw)) { type = 'country'; value = raw.toUpperCase(); }
     if (!value) {
-      requiredInput('trusted-input', 'trusted-form-feedback', 'Une valeur doit suivre UA:.');
+      formFeedback('trusted-form-feedback', 'Saisis une valeur après UA:.', 'error');
+      toast('Saisis une valeur après UA:.', 'warning');
+      document.getElementById('trusted-input')?.focus();
       return;
     }
     formFeedback('trusted-form-feedback', 'Ajout de l’exception de confiance…', 'loading');
