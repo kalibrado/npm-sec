@@ -163,7 +163,7 @@ def test_dedicated_control_page_is_separate_from_lists_and_scrollable():
     assert 'id="security-console-scroll"' in page
     assert 'id="security-control-refresh"' in page
     assert page.index('id="panel-control"') < page.index('id="security-control-overview"')
-    assert page.index('id="security-policy-preview"') < page.index('id="panel-lists"')
+    assert page.index('id="security-preview-form"') < page.index('id="panel-lists"')
     assert page.index('id="panel-lists"') < page.index('id="lists-blocked-body"')
     assert 'body[data-view="control"] #panel-control' in css
     assert 'body[data-view="control"] .layout > :not(#panel-control)' in css
@@ -189,7 +189,7 @@ def test_blank_forms_have_inline_errors_and_action_buttons_have_status():
         "requiredInput('lists-trusted-input'",
         "container.dataset.decision = 'error'",
         "formFeedback('bl-form-feedback'",
-        "withBusyButton('bl-apply-export'",
+        "withBusyButton(buttonId",
     ]:
         assert part in js
     assert "'X-Purge-Confirmation': 'PURGER'" in js
