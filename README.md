@@ -84,6 +84,12 @@ BASE_URL=http://localhost:8000 ADMIN_TOKEN=<token> ./scripts/smoke-test.sh
 
 Le `ADMIN_TOKEN` reste accepté pour les scripts/API, même si l'UI utilise les sessions web.
 
+## Ingestion continue des logs (branche dev)
+
+La collecte ne dépend plus d'un navigateur ouvert : un ingesteur serveur unique lit le fichier NPM, mémorise sa position en SQLite et tolère les rotations/troncatures observées. Le SSE (`/events`) est désormais un flux **lecture seule** avec reprise par `since_id`. Les insertions portent une clé d'origine unique pour éviter les doublons après crash.
+
+**Important :** l'application doit rester sur **un seul worker Uvicorn** avec cette architecture. Un cluster nécessite un verrou d'ingestion distribué ou un worker distinct. Lors d'une migration depuis une base existante sans curseur, l'ingesteur démarre à la fin du fichier courant, pour éviter de doubler les données historiques ; ce choix peut laisser des événements anciens non importés.
+
 ## Authentification des API
 
 Les endpoints contenant des logs, des profils IP, des statistiques détaillées, des règles et des métriques exigent désormais une session authentifiée ou le header `X-Admin-Token`. Cela inclut `/events`, `/stats`, `/history`, `/widget` et `/metrics`. Un widget Homepage ou Prometheus doit donc être configuré avec un accès de service approprié ; les accès publics anonymes ne fonctionnent plus.
