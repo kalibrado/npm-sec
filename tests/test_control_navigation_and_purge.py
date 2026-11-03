@@ -254,7 +254,7 @@ def test_purge_keeps_real_file_cursor_and_collects_only_new_lines(client):
             "uri": "/",
             "status": 200,
             "allowed": "yes",
-        }) + "\\n"
+        }) + "\n"
 
     path.write_text(line("203.0.113.81"), encoding="utf-8")
     assert ingestion.ingest_file_once() == 1
