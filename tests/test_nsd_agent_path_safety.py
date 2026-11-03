@@ -14,15 +14,28 @@ SPEC.loader.exec_module(agent)
 
 
 class AgentPathSafetyTests(unittest.TestCase):
+    @staticmethod
+    def checked_paths():
+        return tuple(dict.fromkeys((
+            "/data", "/data/nginx", agent.CUSTOM, agent.TARGET,
+            *(str(Path(target).parent) for target in agent.SNIPPETS.values()),
+            *agent.SNIPPETS.values(),
+            *(target + ".candidate" for target in agent.SNIPPETS.values()),
+        )))
+
     def test_all_missing_or_regular_paths_are_allowed(self):
         with patch.object(agent.subprocess, "run", return_value=subprocess.CompletedProcess([], 1)) as run:
             agent.DockerNPM("npm").assert_safe_paths()
-        self.assertEqual(run.call_count, 2 + len(agent.SNIPPETS))
+        self.assertEqual(run.call_count, len(self.checked_paths()))
+        self.assertEqual(
+            [call.args[0][-1] for call in run.call_args_list],
+            list(self.checked_paths()),
+        )
 
     def test_symlink_in_any_target_is_rejected(self):
-        for index in range(2 + len(agent.SNIPPETS)):
+        for index in range(len(self.checked_paths())):
             with self.subTest(index=index):
-                responses = [subprocess.CompletedProcess([], 1) for _ in range(2 + len(agent.SNIPPETS))]
+                responses = [subprocess.CompletedProcess([], 1) for _ in range(len(self.checked_paths()))]
                 responses[index] = subprocess.CompletedProcess([], 0)
                 with patch.object(agent.subprocess, "run", side_effect=responses):
                     with self.assertRaisesRegex(RuntimeError, "symbolique"):
