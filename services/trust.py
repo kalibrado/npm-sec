@@ -84,7 +84,8 @@ def is_already_blocked(conn: sqlite3.Connection, ip: str) -> bool:
     if not ip:
         return False
     row = conn.execute(
-        "SELECT 1 FROM blocklist WHERE type='ip' AND value=? LIMIT 1",
+        "SELECT 1 FROM blocklist WHERE type='ip' AND value=? "
+        "AND (expires_at IS NULL OR expires_at > datetime('now')) LIMIT 1",
         [ip],
     ).fetchone()
     return row is not None

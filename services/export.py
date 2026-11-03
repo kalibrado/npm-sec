@@ -9,7 +9,9 @@ from  config import APP_VERSION, EXPORT_DIR, INTERNAL_NETWORKS
 
 def get_blocklist_items(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT type, value, reason, created_at FROM blocklist ORDER BY type, value"
+        """SELECT type, value, reason, created_at, expires_at FROM blocklist
+           WHERE expires_at IS NULL OR expires_at > datetime('now')
+           ORDER BY type, value"""
     ).fetchall()
     return [dict(r) for r in rows]
 
