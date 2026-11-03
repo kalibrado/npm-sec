@@ -60,8 +60,8 @@ def test_declared_but_inactive_log_format_is_not_ready():
 
 def test_partial_json_log_instrumentation_is_rejected():
     text = BASE_CONFIG.replace(
-        ''"npm_security_would_deny":"$npm_security_would_deny"'}',
-        ''"request_time":"$request_time"'}',
+        '''"npm_security_would_deny":"$npm_security_would_deny"''',
+        '''"request_time":"$request_time"''',
     )
     result = analyze_nginx_dump(text)
     assert states(result)["instrumented_access_log"] == "fail"
