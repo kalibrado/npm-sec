@@ -19,9 +19,9 @@ stats_cache = get_stats_cache()
 
 
 @router.get("/events")
-async def events():
+async def events(since_id: int | None = None):
     return StreamingResponse(
-        sse_generator(),
+        sse_generator(since_id=since_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
