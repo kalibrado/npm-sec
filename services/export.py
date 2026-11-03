@@ -40,7 +40,11 @@ def _nginx_address(value: str) -> str:
     """Allow only normalized IP/CIDR tokens in generated Nginx configs."""
     value = (value or "").strip()
     if "/" in value:
-        return str(ipaddress.ip_network(value, strict=False))def render_nginx_blocklist(
+        return str(ipaddress.ip_network(value, strict=False))
+    return str(ipaddress.ip_address(value))
+
+
+def render_nginx_blocklist(
     items: list[dict], trusted_items: list[dict] | None = None
 ) -> str:
     """Generate HTTP-context maps for global and exact-proxy-host policies.
@@ -152,11 +156,6 @@ def _nginx_address(value: str) -> str:
         '    "0:1" 1;',
         "}",
         "",
-    ])
-    return "\n".join(lines)
-
-
-      "",
     ])
     return "\n".join(lines)
 
