@@ -230,3 +230,40 @@ def test_migration_and_ui_bindings(environment):
     assert "/security-control/observations" in script
     assert "changeObservationStatus" in script
     assert "loadObservationIncidents()" in script
+
+
+@pytest.mark.parametrize(
+    "policy,flag",
+    [
+        ({"nested": "observe"}, "1"),
+        ("observe", ["1"]),
+        ("observe", {"value": 1}),
+        (["observe"], "1"),
+        ("observe", True),
+        ("observe", 1.0),
+    ],
+)
+def test_malformed_nested_log_fields_never_crash_parser(policy, flag):
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "remote_addr": "203.0.113.33",
+        "host": "cloud.kaliorbis.fr",
+        "status": "200",
+        "npm_security_policy_mode": policy,
+        "npm_security_would_deny": flag,
+    }
+    event = log_parser.parse_line(json.dumps(payload))
+    assert event is not None
+    assert event["policy_mode"] is None
+    assert event["would_deny"] is None
+
+
+def test_malformed_host_does_not_create_observation_incident(environment):
+    _, path = environment
+    assert write_and_ingest(
+        path,
+        logged_line(host="bad host!", ip="203.0.113.44"),
+        logged_line(host="cloud.kaliorbis.fr", ip="203.0.113.44"),
+    ) == 2
+    assert counts()["logs"] == 2
+    assert counts()["incidents"] == 1
