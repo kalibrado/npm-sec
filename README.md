@@ -119,6 +119,25 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Bannissements temporaires
+
+La blocklist permet maintenant un blocage temporaire de **15 minutes, 1 heure,
+24 heures, 7 jours ou 30 jours**, ou permanent, depuis l'onglet « Listes ».
+
+Le champ JSON `duration_minutes` de `POST /blocklist` est facultatif (1 à
+43200 minutes). Les endpoints `POST /block_ip/{ip}` et
+`POST /block_country/{code}` acceptent également le paramètre de requête
+`duration_minutes`. Un job toutes les minutes supprime les règles expirées,
+consigne l'action et régénère les exports.
+
+Les bans automatiques, toujours désactivés par défaut et en simulation par défaut,
+expirent après `AUTO_BAN_DURATION_MINUTES=60` lorsque leur activation est explicite.
+
+L'expiration en base doit aussi être **appliquée à Nginx** via
+`scripts/npm-sec-apply.sh` ou un mécanisme d'application sur l'hôte NPM.
+Les règles expirées ne sont plus exportées, mais une configuration Nginx déjà
+chargée conserve son état jusqu'au prochain rechargement.
+
 ## Application réelle des règles Nginx
 
 Le dashboard génère désormais deux snippets Nginx :
