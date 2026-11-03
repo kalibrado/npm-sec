@@ -158,7 +158,8 @@ def export_blocklist_json():
 def export_blocklist_nginx():
     with get_db() as conn:
         items = get_blocklist_items(conn)
-    return HTMLResponse(render_nginx_blocklist(items), media_type="text/plain")
+        trusted_items = get_trusted_items(conn)
+    return HTMLResponse(render_nginx_blocklist(items, trusted_items), media_type="text/plain")
 
 
 @router.post("/blocklist/export/apply", dependencies=[Depends(require_admin)])
