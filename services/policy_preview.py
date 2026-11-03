@@ -85,6 +85,6 @@ def evaluate_saved_policy(
         "trusted": trusted,
         "trusted_matches": trusted_matches,
         "matching_block_rules": matches,
-        "requires_country": country_rules_unresolved,
+        "requires_country": country_rules_unresolved and not trusted and not matches,
         "source": "stored_rules_only",
     }
