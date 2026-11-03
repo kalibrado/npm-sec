@@ -208,6 +208,37 @@ def init_db():
             conn.execute("ALTER TABLE access_logs ADD COLUMN source_id TEXT")
         if "source_offset" not in access_columns:
             conn.execute("ALTER TABLE access_logs ADD COLUMN source_offset INTEGER")
+        # NPM Security log fields are optional: older JSON log formats keep
+        # ingesting, but cannot produce verified observation telemetry.
+        if "policy_mode" not in access_columns:
+            conn.execute("ALTER TABLE access_logs ADD COLUMN policy_mode TEXT")
+        if "would_deny" not in access_columns:
+            conn.execute("ALTER TABLE access_logs ADD COLUMN would_deny INTEGER")
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS observation_incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                host TEXT NOT NULL,
+                ip TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open'
+                    CHECK(status IN ('open','acknowledged','resolved')),
+                first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+                last_seen TEXT NOT NULL DEFAULT (datetime('now')),
+                hits INTEGER NOT NULL DEFAULT 1,
+                last_uri TEXT NOT NULL DEFAULT '',
+                last_country TEXT NOT NULL DEFAULT '',
+                last_alert_at TEXT,
+                UNIQUE(host, ip)
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS observation_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                incident_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                recent_hits INTEGER NOT NULL,
+                FOREIGN KEY(incident_id) REFERENCES observation_incidents(id)
+            )"""
+        )
         conn.execute(
             """CREATE TABLE IF NOT EXISTS ingestion_state (
                 path TEXT PRIMARY KEY,
@@ -243,6 +274,10 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(token_hash)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)",
+            "CREATE INDEX IF NOT EXISTS idx_observation_events ON access_logs(host, ip, timestamp) WHERE policy_mode='observe' AND would_deny=1",
+            "CREATE INDEX IF NOT EXISTS idx_observation_incidents_seen ON observation_incidents(last_seen DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_observation_incidents_status ON observation_incidents(status)",
+            "CREATE INDEX IF NOT EXISTS idx_observation_alerts_created ON observation_alerts(created_at DESC)",
         ]:
             conn.execute(idx)
         admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
