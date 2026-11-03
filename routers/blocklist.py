@@ -88,6 +88,7 @@ def add_to_blocklist(entry: BlockEntry):
     else:
         raise HTTPException(status_code=400, detail="Invalid blocklist type")
 
+    expiration = _expires_at(entry.duration_minutes)
     try:
         with get_db() as conn:
             conn.execute(
@@ -96,7 +97,7 @@ def add_to_blocklist(entry: BlockEntry):
                    ON CONFLICT(type, value) DO UPDATE SET
                      reason=excluded.reason, expires_at=excluded.expires_at,
                      created_at=datetime('now')""",
-                [entry_type, value, (entry.reason or "")[:255], _expires_at(entry.duration_minutes)],
+                [entry_type, value, (entry.reason or "")[:255], expiration],
             )
             record_ban_event(conn, value, entry_type, "block", entry.reason or "Manual blocklist add")
             export_info = _sync_exports(conn)
