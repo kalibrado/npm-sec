@@ -42,19 +42,49 @@ class RollbackRequest(BaseModel):
 @router.get("", dependencies=[Depends(require_admin)])
 def get_profile():
     revision, values = load_active()
+    from database import get_db
+    from services.export import (
+        get_blocklist_items, get_trusted_items, get_policy_modes,
+        render_nginx_blocklist, render_nginx_server_guard,
+    )
+    from services.security_profiles import bundle_hash, render_profile
+    with get_db() as conn:
+        latest = conn.execute(
+            """SELECT id,revision,bundle_sha256,status,requested_at,completed_at,
+                      result_message,requested_by
+               FROM nsd_deployment_jobs ORDER BY id DESC LIMIT 1"""
+        ).fetchone()
+        files = render_profile(values)
+        files["npm-blocklist.conf"] = render_nginx_blocklist(
+            get_blocklist_items(conn), get_trusted_items(conn), get_policy_modes(conn)
+        )
+        files["npm-server-guard.conf"] = render_nginx_server_guard()
+        current_hash = bundle_hash(files)
+    if latest is None:
+        deployment = {
+            "state": "not_applied_by_agent",
+            "message": "Aucun déploiement confirmé. NPM est inchangé.",
+        }
+    else:
+        deployment = dict(latest)
+        deployment["state"] = latest["status"]
+        deployment["current_matches_request"] = latest["bundle_sha256"] == current_hash
+        if latest["status"] == "applied" and deployment["current_matches_request"]:
+            deployment["message"] = "Configuration enregistrée identique au dernier bundle appliqué par l'agent."
+        elif latest["status"] == "applied":
+            deployment["state"] = "outdated"
+            deployment["message"] = "Configuration modifiée depuis le dernier déploiement confirmé."
+        elif latest["status"] in {"pending", "claimed"}:
+            deployment["message"] = "Demande d'application en attente de l'agent hôte."
+        else:
+            deployment["message"] = "Dernière demande non appliquée : consulter l'audit."
     return {
         "revision": revision,
         "settings": values,
         "schema": FIELDS,
         "defaults": DEFAULTS,
         "history": history(20),
-        "deployment": {
-            "state": "not_applied_by_agent",
-            "message": (
-                "Modifications enregistrées en base. L'agent de validation "
-                "et d'application n'est pas encore activé : NPM reste inchangé."
-            ),
-        },
+        "deployment": deployment,
     }
 
 
