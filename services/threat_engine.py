@@ -104,12 +104,15 @@ def analyze_threat(event: dict, conn: sqlite3.Connection | None = None) -> dict:
             summary = conn.execute(
                 """SELECT COUNT(DISTINCT uri) AS unique_paths,
                           SUM(CASE WHEN status IN (403,404) THEN 1 ELSE 0 END) AS denied
-                   FROM access_logs
-                   WHERE ip=? AND host=? AND datetime(timestamp) > datetime('now', ?)""",
-                [ip, host, f"-{SCAN_WINDOW_MIN} minutes"],
+                   FROM (
+                       SELECT uri, status FROM access_logs
+                       WHERE ip=? AND host=? AND datetime(timestamp) > datetime('now', ?)
+                       UNION ALL SELECT ? AS uri, ? AS status
+                   )""",
+                [ip, host, f"-{SCAN_WINDOW_MIN} minutes", uri, status],
             ).fetchone()
-            distinct_paths = (summary["unique_paths"] or 0) + 1
-            denied = (summary["denied"] or 0) + 1
+            distinct_paths = summary["unique_paths"] or 0
+            denied = summary["denied"] or 0
             if distinct_paths >= SCAN_UNIQUE_URI_THRESHOLD and denied >= SCAN_DENIED_THRESHOLD:
                 score += 55
                 reasons.append("http_path_enumeration")
