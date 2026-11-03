@@ -16,6 +16,7 @@ ALERT_THRESHOLD = int(os.getenv("ALERT_THRESHOLD", "50"))
 THREAT_AUTO_BLOCK_THRESHOLD = int(os.getenv("THREAT_AUTO_BLOCK_THRESHOLD", "0"))
 AUTO_BAN_ENABLED = os.getenv("AUTO_BAN_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 AUTO_BAN_SCORE = int(os.getenv("AUTO_BAN_SCORE", str(THREAT_AUTO_BLOCK_THRESHOLD or 75)))
+AUTO_BAN_DURATION_MINUTES = min(max(int(os.getenv("AUTO_BAN_DURATION_MINUTES", "60")), 1), 43200)
 AUTO_BAN_EXPORT_APPLY = os.getenv("AUTO_BAN_EXPORT_APPLY", "true").lower() in {"1", "true", "yes", "on"}
 AUTO_BAN_RELOAD = os.getenv("AUTO_BAN_RELOAD", "false").lower() in {"1", "true", "yes", "on"}
 AUTO_BAN_DRY_RUN = os.getenv("AUTO_BAN_DRY_RUN", "true").lower() in {"1", "true", "yes", "on"}
