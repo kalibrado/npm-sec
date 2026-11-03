@@ -17,6 +17,12 @@ def get_blocklist_items(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_policy_modes(conn: sqlite3.Connection) -> dict[str, str]:
+    """Explicit overrides only; legacy installations default to block."""
+    rows = conn.execute("SELECT host, mode FROM policy_modes ORDER BY host").fetchall()
+    return {row["host"]: row["mode"] for row in rows}
+
+
 def get_trusted_items(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT type, value, reason, created_at FROM trusted_entries ORDER BY type, value"
@@ -45,7 +51,9 @@ def _nginx_address(value: str) -> str:
 
 
 def render_nginx_blocklist(
-    items: list[dict], trusted_items: list[dict] | None = None
+    items: list[dict],
+    trusted_items: list[dict] | None = None,
+    policy_modes: dict[str, str] | None = None,
 ) -> str:
     """Generate HTTP-context maps for global and exact-proxy-host policies.
 
@@ -146,14 +154,35 @@ def render_nginx_blocklist(
             "}",
         ])
 
+    modes = {}
+    for host, mode in (policy_modes or {}).items():
+        scope = validate_proxy_host(host)
+        if mode not in {"block", "observe"}:
+            raise ValueError(f"Invalid policy enforcement mode: {mode}")
+        modes[scope] = mode
+
+    # Preserve all existing installations: no override means BLOCK.
+    # Observe mode computes would_deny but deliberately returns no 403.
     lines.extend([
+        "map $host $npm_security_policy_mode {",
+        f"    default {modes.get('', 'block')};",
+        *[
+            f"    {host} {mode};"
+            for host, mode in sorted(modes.items())
+            if host
+        ],
+        "}",
         'map "$npm_security_blocked_ip:$npm_security_blocked_country:$npm_security_host_ip_blocked:$npm_security_host_country_blocked" $npm_security_any_block {',
         "    default 0;",
         "    ~1 1;",
         "}",
-        'map "$npm_security_trusted_ip:$npm_security_any_block" $npm_security_deny {',
+        'map "$npm_security_trusted_ip:$npm_security_any_block" $npm_security_would_deny {',
         "    default 0;",
         '    "0:1" 1;',
+        "}",
+        'map "$npm_security_policy_mode:$npm_security_would_deny" $npm_security_deny {',
+        "    default 0;",
+        '    "block:1" 1;',
         "}",
         "",
     ])
@@ -174,7 +203,11 @@ def _write_atomic(path, content: str):
     os.replace(tmp, path)
 
 
-def write_blocklist_exports(items: list[dict], trusted_items: list[dict] | None = None) -> dict:
+def write_blocklist_exports(
+    items: list[dict],
+    trusted_items: list[dict] | None = None,
+    policy_modes: dict[str, str] | None = None,
+) -> dict:
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     json_path = EXPORT_DIR / "blocklist.json"
     nginx_path = EXPORT_DIR / "npm-blocklist.conf"
@@ -182,7 +215,7 @@ def write_blocklist_exports(items: list[dict], trusted_items: list[dict] | None 
     json_payload = render_blocklist_json(items, trusted_items)
     server_guard_path = EXPORT_DIR / "npm-server-guard.conf"
     _write_atomic(json_path, json.dumps(json_payload, ensure_ascii=False, indent=2) + "\n")
-    _write_atomic(nginx_path, render_nginx_blocklist(items, trusted_items))
+    _write_atomic(nginx_path, render_nginx_blocklist(items, trusted_items, policy_modes))
     _write_atomic(server_guard_path, render_nginx_server_guard())
 
     return {
