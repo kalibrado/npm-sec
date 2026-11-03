@@ -104,6 +104,30 @@ l'enregistrement d'un bannissement ne signifie pas qu'il est déjà appliqué
 par Nginx Proxy Manager. Les réseaux internes et les IP explicitement
 de confiance ne proposent pas d'action de blocage depuis cette vue.
 
+## Ergonomie du centre de contrôle et purge des données
+
+Le **Centre de contrôle** est maintenant un onglet dédié avec une zone
+défilante indépendante, sur ordinateur et mobile. La vue **Listes** reste
+réservée aux blocklists et aux exceptions de confiance (sur mobile :
+**Plus → Listes**).
+
+Les formulaires affichent des erreurs lorsque leurs données sont
+manquantes, un état de traitement et un retour de résultat persistant.
+Le gestionnaire des exports indique les chemins complets des deux
+fichiers Nginx générés, dont `npm-server-guard.conf`.
+
+Depuis l'onglet **Logs**, l'action **Purger les logs** demande une
+confirmation explicite (`PURGER`) et une session administrateur.
+Elle supprime les logs stockés en SQLite, les signaux de menaces et
+les incidents d'Observation associés, **mais conserve** les règles de
+sécurité, les exceptions, les comptes et les curseurs du collecteur.
+Les logs sources du conteneur NPM ne sont pas effacés.
+
+Le cache PWA privilégie désormais la version réseau de l'interface et
+ne stocke plus les réponses des API authentifiées.
+
+[Guide de navigation, retours d'actions et purge des logs](docs/CONTROL_CENTER_AND_LOG_PURGE.md).
+
 ## Centre de contrôle de sécurité
 
 La page **Listes de sécurité** présente un aperçu vérifiable des dernières
