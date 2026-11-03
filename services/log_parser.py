@@ -7,6 +7,8 @@ from  config import ALERT_THRESHOLD, AUTO_BAN_EXPORT_APPLY, AUTO_BAN_RELOAD, DB_
 from  database import get_db, invalidate_stats_cache
 from  services.auto_ban import maybe_auto_ban
 from  services.discord import send_discord_alert
+from config import OBSERVE_ALERT_DISCORD_ENABLED
+from services.observation import record_observation
 from  services.export import get_blocklist_items, get_policy_modes, get_trusted_items, write_blocklist_exports
 from  services.nginx import reload_nginx_if_enabled
 from  services.threat_engine import analyze_threat, classify_threat, threat_tags_for_event
@@ -17,7 +19,17 @@ last_alert_time = 0.0
 def parse_line(line: str) -> dict | None:
     try:
         data = json.loads(line.strip())
+        if not isinstance(data, dict):
+            return None
         ip = data.get("remote_addr", "")
+        # Only Nginx-emitted values, captured by an explicitly configured
+        # JSON log_format, are eligible for observation incidents.
+        policy_mode = data.get("npm_security_policy_mode")
+        flag = data.get("npm_security_would_deny")
+        if policy_mode not in {"observe", "block"} or flag not in {"0", "1", 0, 1} or isinstance(flag, bool):
+            policy_mode, would_deny = None, None
+        else:
+            would_deny = int(flag)
         # if is_internal_ip(ip):
         #     return None
         return {
@@ -35,6 +47,8 @@ def parse_line(line: str) -> dict | None:
             "uri": data.get("uri", data.get("request_uri", "")),
             "status": int(data.get("status", 0)),
             "blocked": 1 if data.get("allowed", "yes") == "no" else 0,
+            "policy_mode": policy_mode,
+            "would_deny": would_deny,
             "ua": data.get("http_user_agent", ""),
             "latitude": float(data.get("latitude", 0) or 0),
             "longitude": float(data.get("longitude", 0) or 0),
@@ -55,11 +69,13 @@ def insert_log(event: dict) -> dict:
             """
             INSERT OR IGNORE INTO access_logs
                 (timestamp, ip, country_code, country_name, city, isp, asn, method, referer,
-                 host, user_agent, uri, status, blocked, ua, latitude, longitude, request_time, threat, source_id, source_offset)
+                 host, user_agent, uri, status, blocked, ua, latitude, longitude, request_time, threat,
+                 policy_mode, would_deny, source_id, source_offset)
             VALUES
                 (:timestamp, :ip, :country_code, :country_name, :city, :isp, :asn, :method,
                  :referer, :host, :user_agent, :uri, :status, :blocked, :ua,
-                 :latitude, :longitude, :request_time, :threat, :source_id, :source_offset)
+                 :latitude, :longitude, :request_time, :threat,
+                 :policy_mode, :would_deny, :source_id, :source_offset)
         """,
             event,
         )
@@ -90,8 +106,19 @@ def insert_log(event: dict) -> dict:
                     [threat_event_id, tag],
                 )
 
+        alert = record_observation(conn, event)
         auto_banned = maybe_auto_ban(event, conn)
         conn.commit()
+
+        if alert and OBSERVE_ALERT_DISCORD_ENABLED:
+            # Optional and non-blocking delivery only after the DB commit.
+            # No attacker-controlled URI or user-agent is sent to Discord.
+            host = alert["host"].replace("@", "")[:253]
+            send_discord_alert(
+                f"🛡️ NPM Security OBSERVE: {alert['recent_hits']} requêtes "
+                f"qui auraient été refusées pour IP {alert['ip']} "
+                f"sur domaine {host}. Incident #{alert['incident_id']}."
+            )
 
         if auto_banned and AUTO_BAN_EXPORT_APPLY:
             # Export after commit so the generated files see the new blocklist row.
