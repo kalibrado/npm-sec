@@ -214,6 +214,9 @@ def init_db():
             conn.execute("ALTER TABLE access_logs ADD COLUMN policy_mode TEXT")
         if "would_deny" not in access_columns:
             conn.execute("ALTER TABLE access_logs ADD COLUMN would_deny INTEGER")
+        for col in ("rule_path_id", "rule_ua_id", "rule_method_id"):
+            if col not in access_columns:
+                conn.execute(f"ALTER TABLE access_logs ADD COLUMN {col} INTEGER")
         conn.execute(
             """CREATE TABLE IF NOT EXISTS observation_incidents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -314,6 +317,44 @@ def init_db():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_nsd_deployments_status "
             "ON nsd_deployment_jobs(status, id)"
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS security_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL CHECK(kind IN ('path','ua','method')),
+                value TEXT NOT NULL,
+                host TEXT NOT NULL DEFAULT '',
+                priority INTEGER NOT NULL DEFAULT 100
+                    CHECK(priority BETWEEN 1 AND 1000),
+                enabled INTEGER NOT NULL DEFAULT 1,
+                reason TEXT NOT NULL,
+                expires_at TEXT,
+                match_count INTEGER NOT NULL DEFAULT 0,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(kind,value,host)
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS security_rule_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                before_json TEXT,
+                after_json TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_security_rule_active "
+            "ON security_rules(enabled,kind,priority DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_security_rule_audit_ts "
+            "ON security_rule_audit(created_at DESC)"
         )
         admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
         if admin_count == 0:
