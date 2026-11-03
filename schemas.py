@@ -34,3 +34,7 @@ class BlockEntry(BaseModel):
 class PolicyModeUpdate(BaseModel):
     host: Optional[str] = None
     mode: Literal["block", "observe"]
+
+
+class ObservationIncidentStatusUpdate(BaseModel):
+    status: Literal["open", "acknowledged", "resolved"]
