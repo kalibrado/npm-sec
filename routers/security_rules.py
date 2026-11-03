@@ -75,6 +75,7 @@ def create_rule(payload: RuleInput, user: dict = Depends(require_admin)):
     kind, value, host, reason = _prepare(payload)
     expiry = expiration(payload.duration_minutes)
     with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute("SELECT COUNT(*) FROM security_rules").fetchone()[0]
         if existing >= 500:
             raise HTTPException(status_code=422, detail="Limite de 500 règles atteinte")
@@ -99,6 +100,7 @@ def create_rule(payload: RuleInput, user: dict = Depends(require_admin)):
 def edit_rule(rule_id: int, payload: RuleUpdate, user: dict = Depends(require_admin)):
     kind, value, host, reason = _prepare(payload)
     with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         old = conn.execute("SELECT * FROM security_rules WHERE id=?", (rule_id,)).fetchone()
         if not old:
             raise HTTPException(status_code=404, detail="Règle inexistante")
@@ -115,7 +117,7 @@ def edit_rule(rule_id: int, payload: RuleUpdate, user: dict = Depends(require_ad
         )
         hits = 0 if semantic_change else old["match_count"]
         try:
-            conn.execute(
+            result = conn.execute(
                 """UPDATE security_rules
                    SET kind=?,value=?,host=?,priority=?,enabled=?,reason=?,
                        expires_at=?,match_count=?,version=version+1,
@@ -126,6 +128,8 @@ def edit_rule(rule_id: int, payload: RuleUpdate, user: dict = Depends(require_ad
                     reason, expiry, hits, rule_id, payload.expected_version,
                 ),
             )
+            if result.rowcount != 1:
+                raise HTTPException(status_code=409, detail="Règle modifiée simultanément")
             row = conn.execute("SELECT * FROM security_rules WHERE id=?", (rule_id,)).fetchone()
             _record(conn, user["username"], "update", rule_id, dict(old), dict(row))
             conn.commit()
@@ -138,6 +142,7 @@ def edit_rule(rule_id: int, payload: RuleUpdate, user: dict = Depends(require_ad
 @router.delete("/{rule_id}", dependencies=[Depends(require_admin)])
 def delete_rule(rule_id: int, user: dict = Depends(require_admin)):
     with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         old = conn.execute("SELECT * FROM security_rules WHERE id=?", (rule_id,)).fetchone()
         if not old:
             raise HTTPException(status_code=404, detail="Règle inexistante")
