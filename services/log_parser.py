@@ -144,7 +144,7 @@ def check_alerts():
         count = conn.execute(
             """
             SELECT COUNT(*) FROM access_logs
-            WHERE blocked=1 AND timestamp > datetime('now','-1 minute')
+            WHERE blocked=1 AND datetime(timestamp) > datetime('now','-1 minute')
         """
         ).fetchone()[0]
     if count > ALERT_THRESHOLD:
