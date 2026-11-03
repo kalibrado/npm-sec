@@ -1,12 +1,12 @@
 import os
 import ipaddress
-import secrets
 from pathlib import Path
 import dotenv
 
 dotenv.load_dotenv(Path(__file__).resolve().parent / ".env")
 
 APP_VERSION = os.getenv("APP_VERSION", "0.5.10.1-dev")
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 LOG_FILE = Path(os.getenv("LOG_FILE", "/var/log/docker-app/nginx-proxy-manager/access-geo-detailed.log"))
 DB_FILE = Path(os.getenv("DB_FILE", "./logs.db"))
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
@@ -18,7 +18,7 @@ AUTO_BAN_ENABLED = os.getenv("AUTO_BAN_ENABLED", "false").lower() in {"1", "true
 AUTO_BAN_SCORE = int(os.getenv("AUTO_BAN_SCORE", str(THREAT_AUTO_BLOCK_THRESHOLD or 75)))
 AUTO_BAN_EXPORT_APPLY = os.getenv("AUTO_BAN_EXPORT_APPLY", "true").lower() in {"1", "true", "yes", "on"}
 AUTO_BAN_RELOAD = os.getenv("AUTO_BAN_RELOAD", "false").lower() in {"1", "true", "yes", "on"}
-AUTO_BAN_DRY_RUN = os.getenv("AUTO_BAN_DRY_RUN", "false").lower() in {"1", "true", "yes", "on"}
+AUTO_BAN_DRY_RUN = os.getenv("AUTO_BAN_DRY_RUN", "true").lower() in {"1", "true", "yes", "on"}
 DISCORD_THREAT_ALERTS_ENABLED = os.getenv("DISCORD_THREAT_ALERTS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 WHOIS_CACHE_TTL_DAYS = int(os.getenv("WHOIS_CACHE_TTL_DAYS", "7"))
 
@@ -36,7 +36,7 @@ BRUTE_FORCE_WINDOW_MIN = int(os.getenv("BRUTE_FORCE_WINDOW_MIN", "10"))
 BRUTE_FORCE_LOGIN_THRESHOLD = int(os.getenv("BRUTE_FORCE_LOGIN_THRESHOLD", "10"))
 
 # Web auth / sessions
-SESSION_SECRET = os.getenv("SESSION_SECRET", ADMIN_TOKEN or secrets.token_urlsafe(32))
+SESSION_SECRET = os.getenv("SESSION_SECRET", "")
 SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "npm_sec_session")
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", str(60 * 60 * 12)))
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
@@ -53,3 +53,14 @@ for item in _INTERNAL_NETWORKS_RAW.split(','):
         INTERNAL_NETWORKS.append(ipaddress.ip_network(item, strict=False))
     except ValueError:
         print(f"⚠️ Ignoring invalid INTERNAL_NETWORKS entry: {item}")
+
+def validate_runtime_config():
+    """Reject insecure production secrets before any service starts."""
+    if APP_ENV != "production":
+        return
+    secret = SESSION_SECRET.strip()
+    weak = {"", "changeme", "change-me-now", "replace-with-a-long-random-secret"}
+    if len(secret) < 32 or secret.lower() in weak or "change_me" in secret.lower():
+        raise RuntimeError("SESSION_SECRET must be a strong secret (at least 32 characters) in production")
+    if ADMIN_TOKEN and (len(ADMIN_TOKEN) < 32 or "change" in ADMIN_TOKEN.lower()):
+        raise RuntimeError("ADMIN_TOKEN must be a strong random token in production, or unset")
