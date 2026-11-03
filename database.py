@@ -308,8 +308,7 @@ def init_db():
                 claimed_at TEXT,
                 completed_at TEXT,
                 reported_hash TEXT,
-                result_message TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY(revision) REFERENCES security_profile_revisions(id)
+                result_message TEXT NOT NULL DEFAULT ''
             )"""
         )
         conn.execute(
