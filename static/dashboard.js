@@ -2623,7 +2623,8 @@ function renderProfileSettings(data) {
   status.dataset.state = data.deployment?.state === 'applied' ? 'success'
     : (['failed','rolled_back'].includes(data.deployment?.state) ? 'error' : 'warning');
   void loadNsdDeploymentHistory();
-  root.innerHTML = Object.entries(data.schema).map(([key, spec]) => {
+  const grouped = new Map();
+  Object.entries(data.schema).forEach(([key, spec]) => {
     const value = data.settings[key];
     const id = 'nsd-profile-field-' + key;
     const control = spec.type === 'boolean'
@@ -2635,12 +2636,20 @@ function renderProfileSettings(data) {
         : '<input class="search" id="' + id + '" ' +
           (spec.type === 'integer' ? 'type="number" min="' + spec.min + '" max="' + spec.max + '"' : 'type="text"') +
           ' value="' + esc(Array.isArray(value) ? value.join(', ') : value) + '">';
-    return '<label class="nsd-profile-field" for="' + id + '">' +
+    const field = '<label class="nsd-profile-field" for="' + id + '">' +
       '<span class="nsd-profile-label">' + esc(spec.label) + '</span>' + control +
       '<small>' + esc(spec.description) + ' <em>Défaut : ' +
       esc(Array.isArray(spec.default) ? spec.default.join(', ') : String(spec.default)) +
       '</em></small></label>';
-  }).join('');
+    const group = spec.group || 'Autres';
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(field);
+  });
+  root.innerHTML = [...grouped.entries()].map(([group, fields]) =>
+    '<fieldset class="nsd-settings-group"><legend>' + esc(group) + '</legend>' +
+    '<div class="nsd-settings-group-fields">' + fields.join('') +
+    '</div></fieldset>'
+  ).join('');
 
   const history = document.getElementById('nsd-profile-history');
   history.innerHTML = data.history?.length ? data.history.map(row =>
