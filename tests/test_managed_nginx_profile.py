@@ -81,8 +81,7 @@ map $http_x_lab_country $geoip2_data_country_code {
         ("latitude", "0"), ("longitude", "0"),
         ("asn", "0"), ("isp", "Lab"),
     ]:
-        geo += "map $http_x_lab_country $geoip2_data_" + var
-        + f" {{ default {default}; }}\n"
+        geo += "map $http_x_lab_country $geoip2_data_" + var + f" {{ default {default}; }}\n"
 
     blocklist = tmp / "npm-blocklist.conf"
     guard = tmp / "npm-server-guard.conf"
