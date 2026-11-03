@@ -3,12 +3,12 @@ import io
 import shutil
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse, Response
 
 from  auth_deps import require_admin
 from  config import BACKUP_DIR, CSV_EXPORT_LIMIT, DB_FILE, DB_RETENTION_DAYS, DISCORD_WEBHOOK_URL, PROMETHEUS_METRICS_ENABLED
-from  database import get_db
+from  database import get_db, invalidate_stats_cache
 from  report_generator import send_discord_with_attachment
 from  services.reports import generate_report_file
 
@@ -145,6 +145,56 @@ def cleanup_database(days: int = None):
         deleted = cur.rowcount
         conn.commit()
     return {"status": "ok", "retention_days": days, "deleted_rows": deleted}
+
+
+@router.post("/db/purge-logs", dependencies=[Depends(require_admin)])
+def purge_saved_logs(
+    payload: dict,
+    confirmation: str = Header(default="", alias="X-Purge-Confirmation"),
+):
+    """Erase stored traffic and derived findings, not NPM's source log file.
+
+    The explicit custom header provides an additional check against cookie
+    session CSRF, while the confirmation phrase protects against accidental
+    UI clicks. The ingestion cursor is deliberately preserved: historical
+    lines must not be replayed after the purge.
+    """
+    expected = "PURGER"
+    if payload.get("confirmation") != expected or confirmation != expected:
+        raise HTTPException(
+            status_code=422, detail="Saisissez PURGER pour confirmer la suppression",
+        )
+
+    tables = (
+        "threat_tags",
+        "threat_events",
+        "observation_alerts",
+        "observation_incidents",
+        "access_logs",
+    )
+    deleted = {}
+    with get_db() as conn:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            for table in tables:
+                deleted[table] = conn.execute(f"DELETE FROM {table}").rowcount
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    invalidate_stats_cache()
+    return {
+        "status": "ok",
+        "deleted": deleted,
+        "preserved": [
+            "blocklist", "trusted_entries", "policy_modes", "ban_events",
+            "users", "sessions", "ingestion_state",
+        ],
+        "message": (
+            "Historique local supprimé. Les logs Nginx sur disque ne sont "
+            "pas touchés et la collecte des nouvelles requêtes continue."
+        ),
+    }
 
 
 @router.get("/generate-report", dependencies=[Depends(require_admin)])
