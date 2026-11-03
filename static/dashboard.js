@@ -2145,6 +2145,175 @@ async function handleSuspectAction(event) {
   }
 }
 
+
+let nsdAdvancedRuleCache = [];
+
+function resetAdvancedRuleEditor() {
+  for (const key of ['id','version','value','host','reason']) {
+    const el = document.getElementById('nsd-rule-' + key);
+    if (el) el.value = '';
+  }
+  document.getElementById('nsd-rule-kind').value = 'path';
+  document.getElementById('nsd-rule-priority').value = '100';
+  document.getElementById('nsd-rule-duration').value = '';
+  document.getElementById('nsd-rule-enabled').checked = true;
+  document.getElementById('nsd-rule-save').textContent = 'Ajouter une règle';
+}
+
+async function loadAdvancedRules() {
+  const body = document.getElementById('nsd-rules-body');
+  const audit = document.getElementById('nsd-rule-audit');
+  if (!body || !audit) return;
+  try {
+    const [rules, changes] = await Promise.all([
+      fetchJsonSafe('/security-rules'),
+      fetchJsonSafe('/security-rules/audit')
+    ]);
+    nsdAdvancedRuleCache = rules;
+    document.getElementById('nsd-rules-count').textContent = rules.length;
+    body.innerHTML = rules.length ? rules.map(rule =>
+      '<tr><td>' + esc(rule.kind) + '</td>' +
+      '<td class="ip-cell">' + esc(rule.value) + '</td>' +
+      '<td>' + esc(rule.host || 'Global') + '</td>' +
+      '<td>' + Number(rule.priority) + '</td>' +
+      '<td>' + (rule.enabled && (!rule.expires_at || new Date(rule.expires_at + 'Z') > new Date())
+        ? 'Active' : 'Inactive / expirée') + '</td>' +
+      '<td>' + (rule.expires_at ? fmtDateTime(rule.expires_at) : 'Permanent') + '</td>' +
+      '<td>' + num(rule.match_count || 0) + '</td>' +
+      '<td><button type="button" class="list-action-btn" data-rule-edit="' + Number(rule.id) + '">Éditer</button> ' +
+      '<button type="button" class="list-action-btn" data-rule-toggle="' + Number(rule.id) + '">' +
+      (rule.enabled ? 'Désactiver' : 'Activer') + '</button> ' +
+      '<button type="button" class="list-action-btn" data-rule-delete="' + Number(rule.id) + '">Supprimer</button>' +
+      '</td></tr>'
+    ).join('') : emptyRow(8, '🛡️', 'Aucune règle HTTP avancée');
+    audit.innerHTML = changes.length ? changes.slice(0, 30).map(item =>
+      '<div class="nsd-profile-revision"><span>#' + Number(item.rule_id) + ' · ' +
+      esc(item.action) + ' · ' + esc(item.actor) + '<small>' +
+      esc(item.created_at) + '</small></span></div>'
+    ).join('') : 'Aucune édition de règle.';
+    body.querySelectorAll('[data-rule-edit]').forEach(btn =>
+      btn.addEventListener('click', () => editAdvancedRule(Number(btn.dataset.ruleEdit))));
+    body.querySelectorAll('[data-rule-toggle]').forEach(btn =>
+      btn.addEventListener('click', () => void toggleAdvancedRule(Number(btn.dataset.ruleToggle))));
+    body.querySelectorAll('[data-rule-delete]').forEach(btn =>
+      btn.addEventListener('click', () => void deleteAdvancedRule(Number(btn.dataset.ruleDelete))));
+  } catch(error) {
+    body.innerHTML = emptyRow(8, '⚠️', 'Règles indisponibles');
+    document.getElementById('nsd-rule-feedback').textContent =
+      error.message || 'Impossible de charger les règles.';
+  }
+}
+
+function editAdvancedRule(id) {
+  const rule = nsdAdvancedRuleCache.find(item => item.id === id);
+  if (!rule) return;
+  document.getElementById('nsd-rule-id').value = rule.id;
+  document.getElementById('nsd-rule-version').value = rule.version;
+  document.getElementById('nsd-rule-kind').value = rule.kind;
+  document.getElementById('nsd-rule-value').value = rule.value;
+  document.getElementById('nsd-rule-host').value = rule.host || '';
+  document.getElementById('nsd-rule-priority').value = rule.priority;
+  document.getElementById('nsd-rule-reason').value = rule.reason || '';
+  document.getElementById('nsd-rule-enabled').checked = !!rule.enabled;
+  document.getElementById('nsd-rule-duration').value = '';
+  document.getElementById('nsd-rule-save').textContent = 'Enregistrer les changements';
+  const feedback = document.getElementById('nsd-rule-feedback');
+  feedback.dataset.state = 'info';
+  feedback.textContent = 'Édition #' + id + '. Durée vide = conserver l’expiration actuelle.';
+  document.getElementById('nsd-rule-value').focus();
+}
+
+async function advancedRuleRequest(path, method, values) {
+  const response = await adminFetch(path, {
+    method,
+    headers: {'Content-Type':'application/json'},
+    ...(values === null ? {} : {body:JSON.stringify(values)})
+  });
+  const data = await response.json();
+  if (!response.ok || data.error) {
+    const detail = data.detail || data.error || ('HTTP ' + response.status);
+    throw new Error(Array.isArray(detail)
+      ? detail.map(item => item.msg || String(item)).join(' ; ') : String(detail));
+  }
+  return data;
+}
+
+async function saveAdvancedRule(event) {
+  event.preventDefault();
+  if (!requireAdminClient()) return;
+  const id = Number(document.getElementById('nsd-rule-id').value || 0);
+  const feedback = document.getElementById('nsd-rule-feedback');
+  const value = document.getElementById('nsd-rule-value').value.trim();
+  const reason = document.getElementById('nsd-rule-reason').value.trim();
+  const priorityText = document.getElementById('nsd-rule-priority').value.trim();
+  const priority = Number(priorityText);
+  if (!value || reason.length < 5 || !/^\d+$/.test(priorityText)
+      || priority < 1 || priority > 1000) {
+    feedback.dataset.state = 'error';
+    feedback.textContent = 'Valeur, priorité de 1 à 1000 et motif de cinq caractères minimum requis.';
+    toast(feedback.textContent, 'warning');
+    return;
+  }
+  const payload = {
+    kind:document.getElementById('nsd-rule-kind').value,
+    value,
+    host:document.getElementById('nsd-rule-host').value.trim(),
+    priority,
+    enabled:document.getElementById('nsd-rule-enabled').checked,
+    reason
+  };
+  const duration = document.getElementById('nsd-rule-duration').value;
+  if (duration !== '') payload.duration_minutes = Number(duration);
+  if (id) payload.expected_version = Number(document.getElementById('nsd-rule-version').value);
+  await withBusyButton('nsd-rule-save', 'Enregistrement…', async () => {
+    try {
+      await advancedRuleRequest(
+        id ? '/security-rules/' + id : '/security-rules',
+        id ? 'PUT' : 'POST', payload
+      );
+      resetAdvancedRuleEditor();
+      await loadAdvancedRules();
+      feedback.dataset.state = 'success';
+      feedback.textContent = 'Règle enregistrée dans NSD. Application Nginx en attente de l’agent.';
+      toast('Règle HTTP sauvegardée, non encore appliquée', 'success');
+    } catch(error) {
+      feedback.dataset.state = 'error';
+      feedback.textContent = error.message || 'Enregistrement impossible';
+      toast(feedback.textContent, 'danger');
+    }
+  });
+}
+
+async function toggleAdvancedRule(id) {
+  if (!requireAdminClient()) return;
+  const item = nsdAdvancedRuleCache.find(x => x.id === id);
+  if (!item) return;
+  try {
+    await advancedRuleRequest('/security-rules/' + id, 'PUT', {
+      kind:item.kind, value:item.value, host:item.host, priority:item.priority,
+      enabled:!Boolean(item.enabled), reason:item.reason, expected_version:item.version
+    });
+    await loadAdvancedRules();
+    toast('Règle modifiée. Déploiement Nginx en attente.', 'success');
+  } catch(error) { toast(error.message || 'Modification impossible', 'danger'); }
+}
+
+async function deleteAdvancedRule(id) {
+  if (!requireAdminClient()) return;
+  const item = nsdAdvancedRuleCache.find(x => x.id === id);
+  if (!item || !confirm('Supprimer la règle ' + item.kind + ' ' + item.value +
+    ' ? Cette action sera auditée, l’application Nginx restera en attente.')) return;
+  try {
+    await advancedRuleRequest('/security-rules/' + id, 'DELETE', null);
+    resetAdvancedRuleEditor();
+    await loadAdvancedRules();
+    toast('Règle supprimée en base. Application Nginx en attente.', 'success');
+  } catch(error) { toast(error.message || 'Suppression impossible', 'danger'); }
+}
+
+document.getElementById('nsd-rule-form')?.addEventListener('submit', saveAdvancedRule);
+document.getElementById('nsd-rule-cancel')?.addEventListener('click', resetAdvancedRuleEditor);
+
 async function loadSecurityLists() {
   if (securityListsLoading) return;
   securityListsLoading = true;
@@ -2198,6 +2367,7 @@ async function loadSecurityLists() {
       </tr>`).join('') : emptyRow(5, '📭', 'Aucun événement');
 
     applyListTab(currentListTab);
+    void loadAdvancedRules();
     return true;
   } catch (e) {
     blockedBody.innerHTML = emptyRow(7, '⚠️', 'Erreur de chargement des listes');
