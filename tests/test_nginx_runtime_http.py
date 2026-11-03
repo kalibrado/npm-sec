@@ -21,8 +21,8 @@ HOST_CLOUD = "cloud.kaliorbis.fr"
 HOST_JELLYFIN = "jellyfin.kaliorbis.fr"
 
 
-@pytest.fixture
-def nginx_policy_server(tmp_path):
+@pytest.fixture(params=["block", "host-observe", "global-observe"])
+def nginx_policy_server(tmp_path, request):
     nginx = shutil.which("nginx")
     if nginx is None:
         pytest.skip("Nginx executable not installed")
@@ -42,7 +42,14 @@ def nginx_policy_server(tmp_path):
     ]
     http_snippet = tmp_path / "npm-blocklist.conf"
     guard_snippet = tmp_path / "npm-server-guard.conf"
-    http_snippet.write_text(export.render_nginx_blocklist(blocked, trusted), encoding="utf-8")
+    modes = (
+        {HOST_CLOUD: "observe"} if request.param == "host-observe"
+        else {"": "observe", HOST_JELLYFIN: "block"} if request.param == "global-observe"
+        else None
+    )
+    http_snippet.write_text(
+        export.render_nginx_blocklist(blocked, trusted, modes), encoding="utf-8"
+    )
     guard_snippet.write_text(export.render_nginx_server_guard(), encoding="utf-8")
 
     with socket.socket() as probe:
@@ -116,7 +123,7 @@ http {{
             assert process.poll() is None, (
                 f"Nginx exited early: {nginx_log.read_text() if nginx_log.exists() else ''}"
             )
-            yield port
+            yield port, request.param
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -169,7 +176,13 @@ def request_status(port, ip, host, country="FR"):
     ],
 )
 def test_nginx_real_http_policy_decision(nginx_policy_server, ip, host, country, expected):
-    actual = request_status(nginx_policy_server, ip, host, country)
+    port, mode = nginx_policy_server
+    actual = request_status(port, ip, host, country)
+    # Two independent configurations demonstrate both an exact-host
+    # OBSERVE override and a global OBSERVE default with a BLOCK exception.
+    if mode != "block" and host == HOST_CLOUD and expected == 403:
+        expected = 204
     assert actual == expected, (
-        f"host={host}, ip={ip}, country={country}: expected {expected}, got {actual}"
+        f"mode={mode}, host={host}, ip={ip}, country={country}: "
+        f"expected {expected}, got {actual}"
     )
