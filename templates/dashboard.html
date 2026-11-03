@@ -242,6 +242,30 @@
 </div>
 <button class="page-btn" id="lists-refresh">Rafraîchir</button>
 </div>
+<section class="security-control-overview" id="security-control-overview" aria-labelledby="security-control-title">
+  <div class="security-control-heading">
+    <div>
+      <div class="security-control-eyebrow">NPM SECURITY / CONTROL CENTER</div>
+      <h2 id="security-control-title">Centre de contrôle</h2>
+      <p>État des règles et signaux de sécurité mesurés sur les dernières 24 heures.</p>
+    </div>
+    <div class="security-control-state" id="control-policy-state" role="status" aria-live="polite">Chargement…</div>
+  </div>
+  <div class="security-control-alert" id="control-policy-message" role="status" aria-live="polite">
+    Vérification de l'application des règles Nginx…
+  </div>
+  <div class="security-control-metrics">
+    <div class="security-control-metric"><span>Règles actives en base</span><strong id="control-active-rules">—</strong><small id="control-rules-breakdown">IP / réseaux / pays</small></div>
+    <div class="security-control-metric"><span>Exceptions de confiance</span><strong id="control-trusted-count">—</strong><small>Exceptions explicites</small></div>
+    <div class="security-control-metric"><span>Requêtes bloquées par NPM</span><strong id="control-proxy-blocked">—</strong><small>Logs des dernières 24 heures</small></div>
+    <div class="security-control-metric"><span>Signaux suspects</span><strong id="control-threat-signals">—</strong><small id="control-threat-breakdown">Brute force / scans HTTP</small></div>
+  </div>
+  <div class="security-control-footnote">
+    <span id="control-auto-ban-mode">Auto-ban : chargement…</span>
+    <span id="control-traffic-count">Trafic : chargement…</span>
+    <a href="https://github.com/kalibrado/npm-sec/blob/dev/docs/NPM_POLICY_ENFORCEMENT.md" target="_blank" rel="noopener noreferrer">Documentation NPM ↗</a>
+  </div>
+</section>
 <div class="lists-content">
 <section class="list-card" data-list-section="blocked">
 <div class="list-card-head">
