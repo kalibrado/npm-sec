@@ -96,6 +96,18 @@ def test_only_allowlisted_settings_are_accepted(client):
     assert client.post("/security-profile/preview", json={"settings":a}).status_code == 422
 
 
+def test_reason_is_required_for_api_audit(client):
+    login(client)
+    values = deepcopy(profiles.DEFAULTS)
+    values["rate_limit_rps"] = 25
+    for note in ("", "test"):
+        response = client.post("/security-profile/revisions", json={
+            "settings": values, "expected_revision": 0, "note": note,
+        })
+        assert response.status_code == 422, response.text
+    assert stored_count() == 0
+
+
 def test_revision_save_has_optimistic_lock_and_immutable_audit(client):
     login(client)
     values = deepcopy(profiles.DEFAULTS)
