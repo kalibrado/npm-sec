@@ -210,6 +210,11 @@ class FakeNPM:
     def check(self):
         self.exec("nginx", "-t")
 
+    def assert_safe_paths(self):
+        # The fake represents regular, non-symlink NPM paths. Dedicated
+        # confinement tests exercise DockerNPM.assert_safe_paths itself.
+        return None
+
     def exists(self, path):
         return path in self.files
 
