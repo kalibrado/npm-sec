@@ -121,9 +121,10 @@ def read_revision(revision: int):
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Révision inexistante")
+    from services.security_profiles import hydrate_revision_settings
     return {
         **{key: row[key] for key in row.keys() if key != "payload"},
-        "settings": json.loads(row["payload"]),
+        "settings": hydrate_revision_settings(json.loads(row["payload"])),
     }
 
 
