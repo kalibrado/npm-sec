@@ -1001,9 +1001,10 @@ async function blockIP(ip) {
   try {
     const r = await adminFetch(`/block_ip/${encodeURIComponent(ip)}`,{method:'POST'});
     const d = await r.json();
-    if (d.status==='blocked') toast(`IP ${ip} enregistrée, déploiement Nginx en attente`,'success');
-    else toast(d.error||'Erreur','danger');
-  } catch { toast('Erreur réseau','danger'); }
+    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Blocage IP refusé');
+    toast(`IP ${ip} enregistrée, déploiement Nginx en attente`, 'success');
+    if (document.body.dataset.view === 'lists') loadSecurityLists();
+  } catch (e) { toast(e.message || 'Erreur réseau', 'danger'); }
 }
 
 // 11. Bulk country block
@@ -1012,9 +1013,10 @@ async function blockCountry(cc, name) {
   try {
     const r = await adminFetch(`/block_country/${encodeURIComponent(cc)}`,{method:'POST'});
     const d = await r.json();
-    if (d.status==='blocked') toast(`Pays ${name||cc} enregistré, déploiement Nginx en attente`,'success');
-    else toast(d.error||'Erreur','danger');
-  } catch { toast('Erreur réseau','danger'); }
+    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Blocage pays refusé');
+    toast(`Pays ${name||cc} enregistré, déploiement Nginx en attente`, 'success');
+    if (document.body.dataset.view === 'lists') loadSecurityLists();
+  } catch (e) { toast(e.message || 'Erreur réseau', 'danger'); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1134,18 +1136,26 @@ async function loadBlocklist() {
 }
 
 async function addBlock() {
-  const value  = document.getElementById('bl-input').value.trim();
+  const value = document.getElementById('bl-input').value.trim();
   const reason = document.getElementById('bl-reason').value.trim();
-  if (!value) return;
-  const type = value.includes('/') ? 'cidr' : /^[A-Z]{2}$/.test(value) ? 'country' : 'ip';
+  if (!value || !requireAdminClient()) return;
+  const type = value.includes('/') ? 'cidr' : /^[A-Za-z]{2}$/.test(value) ? 'country' : 'ip';
   try {
-    await adminFetch('/blocklist',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type,value,reason}) });
+    const r = await adminFetch('/blocklist', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type, value, reason})
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Ajout de règle refusé');
     document.getElementById('bl-input').value = '';
     document.getElementById('bl-reason').value = '';
-    toast(`${value} ajouté à la blocklist`,'success');
+    toast(`${value} enregistré, application Nginx en attente`, 'success');
     loadBlocklist();
     if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch { toast('Erreur lors de l\'ajout','danger'); }
+  } catch (e) {
+    toast(e.message || 'Ajout refusé', 'danger');
+  }
 }
 async function removeBlock(id) {
   try {

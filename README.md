@@ -156,6 +156,23 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Garde-fous des blocages manuels
+
+Les endpoints `POST /blocklist` et `POST /block_ip/{ip}` refusent désormais
+avec **HTTP 409** les IP ou CIDR qui recouvrent les réseaux d'administration
+déclarés dans `INTERNAL_NETWORKS`. La configuration d'exemple inclut aussi
+les réseaux IPv6 loopback, ULA et link-local.
+
+Bloquer une IP déjà couverte par une entrée de confiance IP/CIDR renvoie
+également HTTP 409 : une entrée « trusted » a priorité dans la politique
+Nginx et le blocage serait inopérant. Il faut d'abord retirer la règle de
+confiance, ou gérer les exceptions depuis les listes. Le blocage d'un CIDR
+public peut conserver des exceptions IP de confiance à l'intérieur.
+
+Les pays sont toujours bloquables, mais seuls les codes ASCII à deux lettres
+sont acceptés. Les formulaires affichent maintenant les erreurs HTTP réelles
+au lieu d'annoncer un succès quand l'API a rejeté l'action.
+
 ## Bannissements temporaires
 
 La blocklist permet maintenant un blocage temporaire de **15 minutes, 1 heure,
