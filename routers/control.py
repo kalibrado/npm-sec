@@ -1,3 +1,4 @@
+from services.security_rules import active_rules
 """A compact, grounded overview for the security control center.
 
 The endpoint reports what NPM actually logged separately from security
@@ -217,7 +218,7 @@ def set_policy_mode(payload: PolicyModeUpdate):
             )
             write_blocklist_exports(
                 get_blocklist_items(conn), get_trusted_items(conn),
-                get_policy_modes(conn),
+                get_policy_modes(conn), active_rules(conn),
             )
             conn.commit()
     except Exception as exc:
@@ -237,7 +238,7 @@ def reset_policy_mode(host: str = Query(default="", max_length=253)):
             conn.execute("DELETE FROM policy_modes WHERE host=?", [scope])
             write_blocklist_exports(
                 get_blocklist_items(conn), get_trusted_items(conn),
-                get_policy_modes(conn),
+                get_policy_modes(conn), active_rules(conn),
             )
             conn.commit()
     except Exception as exc:
