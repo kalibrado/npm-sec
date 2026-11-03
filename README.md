@@ -152,8 +152,9 @@ routage ; NSD devient la source de vérité de la configuration sécurité.
 À terme, deux petits includes Nginx raccordent le profil compilé par NSD
 au Nginx de NPM, sans exiger que le dashboard possède le socket Docker.
 
-Le premier socle est disponible dans **Configuration → Configuration de
-sécurité NSD** : paramètres historiques typés avec défauts, validation
+Le socle est disponible dans **Configuration → Configuration de
+sécurité NSD** : **22 paramètres historiques typés** répartis par catégories,
+avec défauts, validation
 côté serveur, prévisualisation des différences, historique de révisions
 immutable et restauration dans une nouvelle révision. Les paramètres
 seront progressivement étendus jusqu'à couvrir tous les réglages.
