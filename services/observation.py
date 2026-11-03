@@ -8,6 +8,9 @@ log values are the source of truth.
 import ipaddress
 import sqlite3
 
+from fastapi import HTTPException
+from services.trust import validate_proxy_host
+
 from config import (
     OBSERVE_ALERT_ENABLED,
     OBSERVE_ALERT_THRESHOLD,
@@ -27,11 +30,11 @@ def record_observation(conn: sqlite3.Connection, event: dict) -> dict | None:
     if event.get("policy_mode") != "observe" or event.get("would_deny") != 1:
         return None
 
-    host = str(event.get("host") or "").strip().lower()[:253]
     raw_ip = event.get("ip") or ""
     try:
         ip = str(ipaddress.ip_address(raw_ip))
-    except ValueError:
+        host = validate_proxy_host(event.get("host"))
+    except (ValueError, HTTPException):
         return None
     if not host:
         return None
