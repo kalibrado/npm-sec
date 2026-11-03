@@ -1713,6 +1713,110 @@ async function loadSecurityControlOverview() {
   }
 }
 
+let observationIncidentsLoading = false;
+
+async function loadObservationIncidents() {
+  const body = document.getElementById('observation-incidents-body');
+  if (!body || observationIncidentsLoading) return;
+  observationIncidentsLoading = true;
+  const note = document.getElementById('observation-telemetry-note');
+  const alertsBox = document.getElementById('observation-alert-history');
+  const hours = Number(document.getElementById('observation-hours')?.value || 24);
+  const status = document.getElementById('observation-status')?.value || 'all';
+  const pretty = value => Number(value || 0).toLocaleString('fr-FR');
+  const put = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
+  };
+  body.innerHTML = '<tr><td colspan="6">Chargement des incidents…</td></tr>';
+
+  try {
+    const query = new URLSearchParams({hours: String(hours), limit: '50', status});
+    const [result, alerts] = await Promise.all([
+      fetchJsonSafe(`/security-control/observations?${query}`),
+      fetchJsonSafe(`/security-control/observations/alerts?hours=${hours}&limit=10`)
+    ]);
+    const instrumented = result.telemetry_available;
+    if (note) {
+      note.dataset.state = instrumented ? 'available' : 'missing';
+      note.textContent = instrumented
+        ? `Télémétrie Nginx active : ${pretty(result.telemetry?.instrumented_requests)} requêtes instrumentées sur la période. Les alertes sont enregistrées en base ; Discord est facultatif.`
+        : 'Aucune télémétrie Nginx instrumentée sur cette période. Ajouter npm_security_policy_mode et npm_security_would_deny au log JSON pour alimenter cette console. Aucune attaque n’est déduite des règles enregistrées.';
+    }
+    put('observation-would-deny', pretty(result.telemetry?.would_deny_requests));
+    put('observation-alerts-count', pretty(result.alert_count));
+    put('observation-incident-count', pretty(result.items?.length));
+
+    const states = {open: 'Ouvert', acknowledged: 'Acquitté', resolved: 'Résolu'};
+    const rows = result.items || [];
+    body.innerHTML = rows.length ? rows.map(item => {
+      const id = Number(item.id);
+      const state = states[item.status] || 'Inconnu';
+      const actions = item.status === 'open'
+        ? `<button type="button" class="list-action-btn" data-observation-id="${id}" data-observation-status="acknowledged">Acquitter</button>
+           <button type="button" class="list-action-btn" data-observation-id="${id}" data-observation-status="resolved">Résoudre</button>`
+        : item.status === 'acknowledged'
+          ? `<button type="button" class="list-action-btn" data-observation-id="${id}" data-observation-status="resolved">Résoudre</button>`
+          : `<button type="button" class="list-action-btn" data-observation-id="${id}" data-observation-status="open">Rouvrir</button>`;
+      return `<tr>
+        <td class="ip-cell"><strong>${esc(item.host || '—')}</strong><small class="suspect-country">${esc(item.ip || '—')}</small></td>
+        <td><strong>${pretty(item.hits)}</strong></td>
+        <td class="ip-cell">${esc(item.last_uri || '—')}</td>
+        <td><span class="observation-state" data-state="${esc(item.status)}">${esc(state)}</span></td>
+        <td class="time-cell">${fmtDateTime(item.last_seen)}</td>
+        <td class="observation-actions">${actions}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6">Aucun incident d’observation pour ce filtre.</td></tr>';
+
+    if (alertsBox) {
+      alertsBox.innerHTML = alerts.length
+        ? `<strong>Dernières alertes</strong><ul>${alerts.map(a =>
+            `<li>${esc(a.host)} · ${esc(a.ip)} · ${pretty(a.recent_hits)} signaux / fenêtre · ${fmtDateTime(a.created_at)}</li>`
+          ).join('')}</ul>`
+        : '<span>Aucune alerte enregistrée sur cette période.</span>';
+    }
+  } catch (error) {
+    if (note) {
+      note.dataset.state = 'error';
+      note.textContent = 'Impossible de lire la télémétrie ou les alertes.';
+    }
+    body.innerHTML = '<tr><td colspan="6">Erreur de récupération des incidents.</td></tr>';
+    if (alertsBox) alertsBox.textContent = '';
+  } finally {
+    observationIncidentsLoading = false;
+  }
+}
+
+async function changeObservationStatus(event) {
+  const button = event.target.closest('button[data-observation-id]');
+  if (!button || !requireAdminClient()) return;
+  const id = Number(button.dataset.observationId);
+  const status = button.dataset.observationStatus;
+  if (!Number.isSafeInteger(id) || id < 1 || !['open', 'acknowledged', 'resolved'].includes(status)) return;
+  const confirmation = status === 'resolved'
+    ? 'Marquer cet incident comme résolu ? Une nouvelle requête observée le rouvrira.'
+    : status === 'open'
+      ? 'Rouvrir cet incident ?'
+      : 'Acquitter cet incident ?';
+  if (!confirm(confirmation)) return;
+  button.disabled = true;
+  try {
+    const response = await adminFetch(`/security-control/observations/${id}/status`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status})
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.detail || result.error || 'Action refusée');
+    toast('Incident mis à jour. Aucune règle Nginx modifiée.', 'success');
+    await loadObservationIncidents();
+  } catch (error) {
+    toast(error.message || 'Mise à jour impossible', 'danger');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 let securitySuspectsLoading = false;
 
 async function loadSecuritySuspects() {
@@ -1837,6 +1941,7 @@ async function loadSecurityLists() {
   securityListsLoading = true;
   void loadSecurityControlOverview();
   void loadSecuritySuspects();
+  void loadObservationIncidents();
   void loadPolicyModes();
   const blockedBody = document.getElementById('lists-blocked-body');
   const trustedBody = document.getElementById('lists-trusted-body');
@@ -2062,6 +2167,14 @@ const trustedInput = document.getElementById('trusted-input');
 if (trustedInput) trustedInput.addEventListener('keydown', e => { if(e.key==='Enter') addTrusted(); });
 
 document.querySelectorAll('[data-list-tab]').forEach(btn => btn.addEventListener('click', () => applyListTab(btn.dataset.listTab)));
+const observationIncidentsBody = document.getElementById('observation-incidents-body');
+if (observationIncidentsBody) observationIncidentsBody.addEventListener('click', changeObservationStatus);
+for (const id of ['observation-hours', 'observation-status']) {
+  const filter = document.getElementById(id);
+  if (filter) filter.addEventListener('change', loadObservationIncidents);
+}
+const observationRefresh = document.getElementById('observation-refresh');
+if (observationRefresh) observationRefresh.addEventListener('click', loadObservationIncidents);
 const suspectsBody = document.getElementById('suspects-body');
 if (suspectsBody) suspectsBody.addEventListener('click', handleSuspectAction);
 for (const id of ['suspects-hours', 'suspects-score']) {
