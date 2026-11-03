@@ -156,6 +156,30 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Modes de protection : Observation et Blocage
+
+Le centre de contrôle expose désormais le mode **Blocage** (historique et
+par défaut) ou **Observation** pour une portée globale ou pour un domaine
+précis. Une configuration spécifique de domaine remplace le mode global
+**pour ce domaine seulement** ; les règles IP/CIDR/pays restent identiques.
+
+Les API admin `GET/POST/DELETE /security-control/policy/modes` permettent
+de consulter, définir et réinitialiser les modes. Le simulateur indique
+distinctement la décision des règles (`rule_decision`) et la décision qui
+serait appliquée avec le mode choisi (`predicted_decision`).
+
+En Observation, Nginx calcule la variable
+`$npm_security_would_deny` mais **ne renvoie pas HTTP 403**.
+Il faut intégrer cette variable dans un format de log NPM si l'on souhaite
+suivre les « aurait été bloqué » en exploitation. Le mode Observation
+**n'émet pas automatiquement d'alerte** ; ce sera une fonctionnalité
+distincte.
+
+Changer le mode ne déclenche jamais le déploiement Nginx : l'export
+devient en attente d'application, avec `nginx -t` et rechargement
+explicite depuis l'hôte. Les anciens déploiements restent par défaut
+en Blocage, pour préserver le comportement existant.
+
 ## Simulateur de décision de politique
 
 Le centre de contrôle dispose d'une **prévisualisation sans effet de bord**.

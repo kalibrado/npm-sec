@@ -299,6 +299,26 @@
     </table>
   </div>
 </section>
+<section class="security-policy-modes" aria-labelledby="security-modes-title">
+  <div class="security-control-eyebrow">POLICY ENGINE / DEPLOYMENT MODES</div>
+  <h2 id="security-modes-title">Mode de protection par domaine</h2>
+  <p class="security-preview-description">Observation calcule les refus potentiels sans bloquer les visiteurs. Blocage active les refus HTTP 403 après application de la politique dans NPM.</p>
+  <form class="security-preview-form" id="security-modes-form">
+    <label>Domaine
+      <input class="search" id="security-modes-host" placeholder="Vide = mode global" autocomplete="off"/>
+    </label>
+    <label>Mode
+      <select class="search" id="security-modes-mode" aria-label="Mode de politique">
+        <option value="block">Blocage (403)</option>
+        <option value="observe">Observation (aucun 403)</option>
+      </select>
+    </label>
+    <button class="apply-btn compact" type="submit">Enregistrer le mode</button>
+  </form>
+  <p class="security-modes-warning">Les changements sont seulement exportés. Ils prennent effet après validation et rechargement Nginx. Observation ne génère pas d’alertes sans configuration de journalisation supplémentaire.</p>
+  <div class="security-modes-status" id="security-modes-status" role="status" aria-live="polite">Chargement des modes…</div>
+  <div class="security-modes-list" id="security-modes-list"></div>
+</section>
 <section class="security-policy-preview" aria-labelledby="security-policy-preview-title">
   <div class="security-control-eyebrow">POLICY ENGINE / SIMULATION</div>
   <h2 id="security-policy-preview-title">Tester une règle sans bloquer</h2>

@@ -123,6 +123,39 @@ La configuration globale d'adresses IP réelles `real_ip_header` / `set_real_ip_
 doit être évaluée : n'accepter les headers de proxy que de proxies en qui on a confiance.
 L'accès admin, VPN et réseaux privés doit être testé avant de bloquer un pays.
 
+## Modes de déploiement : Observer ou bloquer
+
+Depuis le centre de contrôle ou les endpoints admin
+`GET/POST/DELETE /security-control/policy/modes`, choisir :
+
+- **block** : renvoie `403` pour les règles applicables ; c'est la
+  valeur par défaut pour préserver les anciennes installations ;
+- **observe** : calcule les règles mais ne renvoie pas `403`.
+
+Une mise à jour peut cibler un domaine exact :
+
+```json
+{"host":"cloud.kaliorbis.fr","mode":"observe"}
+```
+
+Un host vide modifie le mode global par défaut. Un domaine avec un mode
+explicite a priorité sur ce mode global. Réinitialiser son override lui
+rend le mode global.
+
+L'export expose `$npm_security_would_deny` (valeur `0` ou `1`) et
+`$npm_security_policy_mode` (`block` ou `observe`). Pour suivre en
+exploitation les requêtes **qui auraient été refusées** en Observation,
+ajouter ces variables au format d'access log NPM, puis les analyser
+avec le pipeline de collecte. La prise en charge automatique de ces
+signaux n'est pas encore disponible. Ce mode **ne génère pas d'alerte**
+à lui seul.
+
+**Important :** passer un domaine en Observation retire les protections
+HTTP 403 générées par NPM Security pour ce domaine, *une fois le nouvel
+export appliqué*. Le dashboard demande confirmation. Avant de recharger
+NPM, tester sur un environnement de recette, vérifier les exceptions
+réseau et tenir compte de l'état `pending` versus `applied`.
+
 ## Simuler une politique avant de l'appliquer
 
 Pour tester la politique enregistrée sur un domaine sans modifier NPM :

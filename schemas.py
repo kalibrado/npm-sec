@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 
 
@@ -29,3 +29,8 @@ class BlockEntry(BaseModel):
     reason: Optional[str] = ""
     duration_minutes: Optional[int] = None
     host: Optional[str] = None
+
+
+class PolicyModeUpdate(BaseModel):
+    host: Optional[str] = None
+    mode: Literal["block", "observe"]

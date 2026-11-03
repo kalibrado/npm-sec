@@ -5,7 +5,7 @@ rules that are only generated or pending application to Nginx.
 """
 import ipaddress
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_deps import require_admin
 from config import (
@@ -16,6 +16,12 @@ from config import (
 from database import get_db
 from services.deployment import get_policy_deployment_status
 from services.policy_preview import evaluate_saved_policy
+from schemas import PolicyModeUpdate
+from services.export import (
+    get_blocklist_items, get_trusted_items, get_policy_modes,
+    write_blocklist_exports,
+)
+from services.trust import validate_proxy_host
 from services.trust import is_internal_ip
 
 router = APIRouter(tags=["security-control"], dependencies=[Depends(require_admin)])
@@ -180,3 +186,60 @@ def security_policy_preview(
         "Le statut Nginx réel dépend du dernier déploiement et de la configuration du proxy."
     )
     return prediction
+
+
+@router.get("/security-control/policy/modes")
+def list_policy_modes():
+    """List explicit overrides; other hosts inherit the global mode."""
+    with get_db() as conn:
+        modes = get_policy_modes(conn)
+    return {
+        "default_mode": modes.get("", "block"),
+        "overrides": [
+            {"host": host, "mode": mode}
+            for host, mode in sorted(modes.items())
+            if host
+        ],
+        "policy": get_policy_deployment_status(),
+    }
+
+
+@router.post("/security-control/policy/modes")
+def set_policy_mode(payload: PolicyModeUpdate):
+    scope = validate_proxy_host(payload.host)
+    try:
+        with get_db() as conn:
+            conn.execute(
+                """INSERT INTO policy_modes (host, mode) VALUES (?, ?)
+                   ON CONFLICT(host) DO UPDATE SET
+                       mode=excluded.mode, updated_at=datetime('now')""",
+                [scope, payload.mode],
+            )
+            write_blocklist_exports(
+                get_blocklist_items(conn), get_trusted_items(conn),
+                get_policy_modes(conn),
+            )
+            conn.commit()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to update policy mode") from exc
+    return {
+        "host": scope,
+        "mode": payload.mode,
+        "pending_apply": True,
+    }
+
+
+@router.delete("/security-control/policy/modes")
+def reset_policy_mode(host: str = Query(default="", max_length=253)):
+    scope = validate_proxy_host(host)
+    try:
+        with get_db() as conn:
+            conn.execute("DELETE FROM policy_modes WHERE host=?", [scope])
+            write_blocklist_exports(
+                get_blocklist_items(conn), get_trusted_items(conn),
+                get_policy_modes(conn),
+            )
+            conn.commit()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to reset policy mode") from exc
+    return {"host": scope, "mode": "inherited", "pending_apply": True}

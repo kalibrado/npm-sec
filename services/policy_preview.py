@@ -7,6 +7,7 @@ import ipaddress
 import sqlite3
 
 from config import INTERNAL_NETWORKS
+from services.export import get_policy_modes
 from services.trust import validate_country_code, validate_ip_or_cidr, validate_proxy_host
 
 
@@ -77,11 +78,18 @@ def evaluate_saved_policy(
     else:
         predicted = "allow"
 
+    modes = get_policy_modes(conn)
+    mode = modes.get(scope, modes.get("", "block"))
+    predicted_enforcement = "allow" if mode == "observe" else predicted
+
     return {
+        "enforcement_mode": mode,
+        "rule_decision": predicted,
+        "would_deny": None if predicted == "unknown" else predicted == "deny",
         "ip": ip,
         "host": scope,
         "country_code": country,
-        "predicted_decision": predicted,
+        "predicted_decision": predicted_enforcement,
         "trusted": trusted,
         "trusted_matches": trusted_matches,
         "matching_block_rules": matches,

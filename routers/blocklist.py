@@ -7,7 +7,7 @@ from  database import get_db
 from services.deployment import get_policy_deployment_status
 from  schemas import BlockEntry, TrustedEntry
 from  services.auto_ban import record_ban_event
-from  services.export import get_blocklist_items, get_trusted_items, render_blocklist_json, render_nginx_blocklist, write_blocklist_exports
+from  services.export import get_blocklist_items, get_trusted_items, get_policy_modes, render_blocklist_json, render_nginx_blocklist, write_blocklist_exports
 from  services.nginx import reload_nginx_if_enabled
 from  services.trust import assert_safe_manual_block, validate_country_code, validate_ip_or_cidr, validate_proxy_host, validate_trusted_type
 
@@ -26,7 +26,7 @@ def _expires_at(duration_minutes: int | None) -> str | None:
 def _sync_exports(conn):
     items = get_blocklist_items(conn)
     trusted_items = get_trusted_items(conn)
-    return write_blocklist_exports(items, trusted_items)
+    return write_blocklist_exports(items, trusted_items, get_policy_modes(conn))
 
 
 @router.get("/trusted", dependencies=[Depends(require_admin)])
@@ -226,7 +226,8 @@ def export_blocklist_nginx():
     with get_db() as conn:
         items = get_blocklist_items(conn)
         trusted_items = get_trusted_items(conn)
-    return HTMLResponse(render_nginx_blocklist(items, trusted_items), media_type="text/plain")
+        policy_modes = get_policy_modes(conn)
+    return HTMLResponse(render_nginx_blocklist(items, trusted_items, policy_modes), media_type="text/plain")
 
 
 @router.post("/blocklist/export/apply", dependencies=[Depends(require_admin)])
@@ -234,7 +235,7 @@ def apply_blocklist_export(reload: bool = False):
     with get_db() as conn:
         items = get_blocklist_items(conn)
         trusted_items = get_trusted_items(conn)
-        export_info = write_blocklist_exports(items, trusted_items)
+        export_info = write_blocklist_exports(items, trusted_items, get_policy_modes(conn))
         record_ban_event(conn, "blocklist", "system", "export", f"Exported {len(items)} entries")
         conn.commit()
 

@@ -20,8 +20,10 @@ def test_ip_cidr_policy_enforces_and_trust_overrides():
     assert "198.51.100.0/24 1;" in conf
     assert "geo $npm_security_trusted_ip" in conf
     assert "203.0.113.17 1;" in conf
-    assert 'map "$npm_security_trusted_ip:$npm_security_any_block" $npm_security_deny' in conf
+    assert 'map "$npm_security_trusted_ip:$npm_security_any_block" $npm_security_would_deny' in conf
+    assert 'map "$npm_security_policy_mode:$npm_security_would_deny" $npm_security_deny' in conf
     assert '    "0:1" 1;' in conf
+    assert '    "block:1" 1;' in conf
     assert "    ~1 1;" in conf
     assert "map $host $npm_security_blocked_country" in conf
     assert "map $geoip2_data_country_code" not in conf
