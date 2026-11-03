@@ -77,6 +77,25 @@ Les autres champs obligatoires du journal (dont l'adresse IP, l'hôte
 et le timestamp) doivent aussi être présents. Ne pas intégrer ce
 mini-objet JSON isolément dans le collecteur.
 
+## Test d'intégration automatisé Nginx vers les incidents
+
+La suite CI exécute désormais le parcours complet **Nginx réel → journal
+JSON `escape=json` → ingesteur SQLite → incident → alerte** :
+
+1. Un Nginx jetable, strictement lié à `127.0.0.1`, reçoit des requêtes
+   HTTP sur deux domaines avec politiques IP, CIDR et pays.
+2. Son `log_format` publie `$npm_security_policy_mode` et
+   `$npm_security_would_deny` avec le résultat réellement calculé par Nginx.
+3. Le collecteur lit le fichier JSON généré, déclenche le seuil d'alerte
+   en mode Observation et vérifie l'absence d'incident en mode Blocage.
+4. La relecture des lignes déjà ingérées ne crée aucun doublon.
+
+La suite effectue aussi un contrôle du code pays dans le journal réel.
+**Le pays est simulé en CI** par une variable interne Nginx, et non
+récupéré via une base GeoIP2. La présence du module GeoIP2 et la
+résolution de l'IP réelle en production restent donc des validations
+de recette à effectuer sur ton environnement NPM.
+
 ## Incidents, alertes et anti-spam
 
 Pour chaque nouvelle requête `observe + 1`, le collecteur met à jour
