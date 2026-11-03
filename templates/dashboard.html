@@ -266,6 +266,48 @@
     <a href="https://github.com/kalibrado/npm-sec/blob/dev/docs/NPM_POLICY_ENFORCEMENT.md" target="_blank" rel="noopener noreferrer">Documentation NPM ↗</a>
   </div>
 </section>
+<section class="security-observations" aria-labelledby="security-observations-title">
+  <div class="security-suspects-head">
+    <div>
+      <div class="security-control-eyebrow">INCIDENT RESPONSE / OBSERVE</div>
+      <h2 id="security-observations-title">Incidents en observation</h2>
+      <p>Requêtes dont Nginx a confirmé qu'elles auraient été refusées, sans blocage automatique.</p>
+    </div>
+    <div class="security-suspects-filters">
+      <label for="observation-hours">Période</label>
+      <select class="search" id="observation-hours">
+        <option value="1">1 heure</option>
+        <option value="24" selected>24 heures</option>
+        <option value="168">7 jours</option>
+      </select>
+      <label for="observation-status">État</label>
+      <select class="search" id="observation-status">
+        <option value="all" selected>Tous</option>
+        <option value="open">Ouverts</option>
+        <option value="acknowledged">Acquittés</option>
+        <option value="resolved">Résolus</option>
+      </select>
+      <button type="button" class="page-btn" id="observation-refresh">Actualiser</button>
+    </div>
+  </div>
+  <div class="observation-telemetry-note" id="observation-telemetry-note" role="status" aria-live="polite">
+    Lecture des événements Nginx en observation…
+  </div>
+  <div class="observation-metrics">
+    <div><strong id="observation-would-deny">—</strong><span>Requêtes qui auraient été bloquées</span></div>
+    <div><strong id="observation-alerts-count">—</strong><span>Alertes déclenchées</span></div>
+    <div><strong id="observation-incident-count">—</strong><span>Incidents affichés</span></div>
+  </div>
+  <div class="list-table-wrap">
+    <table class="compact-table observation-incidents-table">
+      <thead>
+        <tr><th>Domaine / IP</th><th>Occurrences</th><th>Dernière requête</th><th>État</th><th>Dernière activité</th><th>Décisions</th></tr>
+      </thead>
+      <tbody id="observation-incidents-body"><tr><td colspan="6">Chargement…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="observation-alert-history" id="observation-alert-history"></div>
+</section>
 <section class="security-suspects" aria-labelledby="security-suspects-title">
   <div class="security-suspects-head">
     <div>
