@@ -2212,6 +2212,10 @@ if (notifBtn) notifBtn.addEventListener('click', enableBrowserNotifications);
 
 // Periodic refresh (stats + charts every 15s)
 setInterval(()=>{ loadStats(true); loadTimeline(); loadHeatmap(); }, 15000);
+// Keep the Observe console current without polling while the tab is hidden.
+setInterval(() => {
+  if (document.body.dataset.view === 'lists') void loadObservationIncidents();
+}, 30000);
 
 // ═══════════════════════════════════════════════════════════
 //  PATCH 5.2 · NPM HEALTH + CONFIG + AUTOBAN SIMULATION
