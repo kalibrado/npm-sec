@@ -514,6 +514,23 @@
 <button class="page-btn" id="health-refresh">Rafraîchir</button>
 </div>
 <div class="lists-content health-content">
+<section class="list-card" data-health-card="ingestion" aria-labelledby="ingestion-health-title">
+  <div class="list-card-head">
+    <div>
+      <div class="side-title" id="ingestion-health-title">Collecte des logs Nginx</div>
+      <div class="list-subtitle">Fichier source, curseur SQLite et erreurs depuis le démarrage du collecteur.</div>
+    </div>
+    <span class="list-count" id="ingestion-health-status" role="status" aria-live="polite">Diagnostic…</span>
+  </div>
+  <div class="ingestion-health-content">
+    <p id="ingestion-health-advice" role="status" aria-live="polite">Analyse du montage et de la collecte en cours…</p>
+    <div class="ingestion-health-metrics" id="ingestion-health-metrics">
+      <div class="health-kv">Chargement des métriques…</div>
+    </div>
+    <div class="ingestion-health-note" id="ingestion-health-note"></div>
+    <button class="page-btn" type="button" id="ingestion-health-refresh">Vérifier la collecte</button>
+  </div>
+</section>
 <section class="list-card" data-health-card="summary">
 <div class="list-card-head">
 <div>
