@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 
 from  auth_deps import require_admin
 from  database import get_db
+from services.deployment import get_policy_deployment_status
 from  schemas import BlockEntry, TrustedEntry
 from  services.auto_ban import record_ban_event
 from  services.export import get_blocklist_items, get_trusted_items, render_blocklist_json, render_nginx_blocklist, write_blocklist_exports
@@ -49,6 +50,11 @@ def remove_trusted(entry_id: int):
         export_info = _sync_exports(conn)
         conn.commit()
     return {"status": "deleted", "id": entry_id}
+
+
+@router.get("/blocklist/deployment", dependencies=[Depends(require_admin)])
+def blocklist_deployment():
+    return get_policy_deployment_status()
 
 
 @router.get("/blocklist", dependencies=[Depends(require_admin)])
@@ -158,7 +164,8 @@ def export_blocklist_json():
 def export_blocklist_nginx():
     with get_db() as conn:
         items = get_blocklist_items(conn)
-    return HTMLResponse(render_nginx_blocklist(items), media_type="text/plain")
+        trusted_items = get_trusted_items(conn)
+    return HTMLResponse(render_nginx_blocklist(items, trusted_items), media_type="text/plain")
 
 
 @router.post("/blocklist/export/apply", dependencies=[Depends(require_admin)])

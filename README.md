@@ -119,6 +119,21 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Application réelle des règles Nginx
+
+Le dashboard génère désormais deux snippets Nginx :
+- `npm-blocklist.conf` : politique IP/CIDR/pays, exemptions d'IP de confiance et décision d'accès ;
+- `npm-server-guard.conf` : condition de refus dans les `server` NPM (HTTP 403).
+
+Les deux snippets doivent être inclus dans Nginx Proxy Manager par l'administrateur.
+L'application n'est **pas** automatique par simple ajout d'une règle en base.
+Le script `scripts/npm-sec-apply.sh`, exécuté sur l'hôte NPM, sauvegarde la configuration
+précédente, valide avec `nginx -t`, fait `nginx -s reload` et restaure en cas d'échec.
+
+Voir [docs/NPM_POLICY_ENFORCEMENT.md](docs/NPM_POLICY_ENFORCEMENT.md) avant toute
+activation. L'API authentifiée `/blocklist/deployment` distingue les exports en attente
+de ceux effectivement confirmés par le script.
+
 ## Exports de blocage
 
 Le dashboard écrit :
