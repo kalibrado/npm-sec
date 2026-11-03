@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from  config import APP_VERSION, EXPORT_DIR, INTERNAL_NETWORKS
 from services.trust import validate_proxy_host
+from services.security_rules import render_nginx_rule_maps
 
 
 def get_blocklist_items(conn: sqlite3.Connection) -> list[dict]:
@@ -54,6 +55,7 @@ def render_nginx_blocklist(
     items: list[dict],
     trusted_items: list[dict] | None = None,
     policy_modes: dict[str, str] | None = None,
+    extra_rules: list[dict] | None = None,
 ) -> str:
     """Generate HTTP-context maps for global and exact-proxy-host policies.
 
@@ -154,6 +156,7 @@ def render_nginx_blocklist(
             "}",
         ])
 
+    lines.extend(render_nginx_rule_maps(extra_rules or []).splitlines())
     modes = {}
     for host, mode in (policy_modes or {}).items():
         scope = validate_proxy_host(host)
@@ -172,7 +175,7 @@ def render_nginx_blocklist(
             if host
         ],
         "}",
-        'map "$npm_security_blocked_ip:$npm_security_blocked_country:$npm_security_host_ip_blocked:$npm_security_host_country_blocked" $npm_security_any_block {',
+        'map "$npm_security_blocked_ip:$npm_security_blocked_country:$npm_security_host_ip_blocked:$npm_security_host_country_blocked:$nsd_extra_blocked" $npm_security_any_block {',
         "    default 0;",
         "    ~1 1;",
         "}",
@@ -207,6 +210,7 @@ def write_blocklist_exports(
     items: list[dict],
     trusted_items: list[dict] | None = None,
     policy_modes: dict[str, str] | None = None,
+    extra_rules: list[dict] | None = None,
 ) -> dict:
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     json_path = EXPORT_DIR / "blocklist.json"
@@ -215,7 +219,7 @@ def write_blocklist_exports(
     json_payload = render_blocklist_json(items, trusted_items)
     server_guard_path = EXPORT_DIR / "npm-server-guard.conf"
     _write_atomic(json_path, json.dumps(json_payload, ensure_ascii=False, indent=2) + "\n")
-    _write_atomic(nginx_path, render_nginx_blocklist(items, trusted_items, policy_modes))
+    _write_atomic(nginx_path, render_nginx_blocklist(items, trusted_items, policy_modes, extra_rules))
     _write_atomic(server_guard_path, render_nginx_server_guard())
 
     return {
