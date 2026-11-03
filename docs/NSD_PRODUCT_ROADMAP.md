@@ -1,0 +1,59 @@
+# NSD — feuille de route produit et architecture (référence)
+
+## Contrat produit
+
+**Nginx Proxy Manager (NPM)** garde uniquement le routage des proxy hosts, les certificats TLS, la génération de ses server blocks et ses fonctions natives. **Nginx Security Dashboard (NSD)** est responsable de toute politique de sécurité, de sa configuration, de son historique, de sa supervision et de sa web UI.
+
+Nginx exécute nécessairement des directives de protection dans le processus NPM. Pour limiter le couplage, les fichiers NPM `http_top.conf` et `server_proxy.conf` n'ont finalement qu'un include chacun, vers un profil compilé par NSD. Le module GeoIP2 reste chargé au démarrage du processus Nginx, selon l'image réelle. L'absence du dashboard ne doit jamais arrêter le routage : le dernier profil validé demeure en place.
+
+La configuration héritée transmise le 03/11/2026 est la valeur **initiale** à préserver, pas le format permanent du système. Les changements futurs sont exclusivement effectués depuis l'interface NSD et validés côté serveur. Les fragments Git `config/nginx-managed/*.conf` sont des modèles d'amorçage et de migration, non une deuxième source de vérité opérationnelle.
+
+## Composants et frontières de confiance
+
+1. **NSD Web UI + API** : session sécurisée, rôles admin / viewer, schéma des paramètres, validation stricte, versionnement et audit des actions. Pas de socket Docker.
+2. **SQLite** : réglages, règles, versions, auteurs, demandes de publication, résultat des tests, historiques et dernières versions validées. Les données d'observabilité restent distinctes.
+3. **Compilateur Nginx** : transformation déterministe de paramètres typés en fichiers autorisés. Aucune directive Nginx brute fournie par un utilisateur, aucun chemin arbitraire ni commande shell. Génère un bundle candidat avec hash, métadonnées et diff ; jamais un fichier actif.
+4. **Agent applicateur sur l'hôte NPM** : service séparé à privilèges réduits, exécutant exclusivement un protocole fixe sur les chemins autorisés. Sauvegarde de la version précédente, publication atomique du candidat, `nginx -t`, `nginx -s reload`, contrôle de succès, et restauration automatique si échec. Émission d'un accusé signé/validé d'application. Limiter les permissions et empêcher les chemins symboliques/évasions.
+5. **Nginx/NPM** : consomme le dernier bundle correctement publié. Aucun appel sortant vers NSD sur les requêtes. L'arrêt de NSD n'affecte pas les proxys.
+6. **Collecteur** : lecture asynchrone durable du JSON Nginx, marqueurs de provenance et d'observation, ingestion SQLite, SSE vers les navigateurs. Diagnostic des montages / curseurs / erreurs.
+
+**Contrainte de sécurité** : l'agent hôte ne sera pas automatiquement installé/activé sur l'instance réelle. L'utilisateur autorise explicitement toute première migration ou mise en production. En attendant : candidat, validation en Nginx jetable, simulation et preview uniquement.
+
+## Cycle de vie des configurations
+
+`DEFAULTS → DRAFT → VALIDATED → PENDING_APPLY → APPLIED` ;
+`VALIDATION_FAILED` ou `APPLY_FAILED → ROLLED_BACK`.
+
+Les valeurs par défaut sont migrées sans écraser les règles SQLite actuelles. Toute édition fait une **nouvelle révision** immutable, avec ID, auteur, date, note, diff et hash ; concurrence gérée par le numéro de révision. Un rollback crée une nouvelle révision à partir d'une version précédente, sans effacer l'audit. Le déploiement n'est déclaré `APPLIED` qu'après une preuve de test + reload par l'agent. Une écriture de fichiers NSD ne suffit pas.
+
+Pour limiter les coupures, utiliser `nginx -t` avant reload ; le reload Nginx graceful conserve les travailleurs précédents tant que possible. Prévoir une stratégie de secours si l'agent devient indisponible. Préserver la connectivité LAN d'administration, ne pas activer les bannissements automatiques par défaut.
+
+## Interfaces prévues
+
+| Vue | Périmètre / critères d'acceptation |
+| --- | --- |
+| Accueil | Volumes, refus confirmés distincts des règles configurées, bans, score de menace, top IP/pays/URI, alertes, état NPM/NSD |
+| Logs temps réel | SSE robuste, pause/reprise, recherche IP/URI/status/méthode/hôte/UA/période, détails filtrés, provenance/règle, actions contextuelles |
+| Carte | 2D GeoIP en direct, couleurs normal/suspect/refusé ; globe 3D optionnel soumis au coût et aux performances |
+| Menaces | Taxonomie, scores configurable et justifiables, niveaux faible/moyen/élevé/critique, courbes, décisions enregistrées/effectives |
+| Santé | NPM, Nginx, NSD, proxys, TLS/certificats, CPU/RAM/disque, latence 4xx/5xx, état collecte et agent |
+| Configuration | Tous réglages typés documentés avec défauts, UI complète, validation, prévisualisation, diff, révisions, validation et rollback |
+| Règles | CRUD IP/CIDR, pays, hôte, URI, méthode, UA ; actifs/inactifs, priorité, expiration, motif, compteur réel des occurrences, scope |
+| Audit | Historique immuable des modifications, auteur, date, ancien/nouveau, statut et preuve de déploiement |
+
+## Lots de développement autonomes
+
+1. **Fondations** : modèle de configuration persistante validée, valeurs héritées, brouillons/versions/audit, web UI éditable, aperçu du rendu. Aucun reload.
+2. **Rendu et tests** : compilateur de profils Nginx, interfaces de validation, tests vrais HTTP/JSON et `nginx -t` en CI. Diff des candidats.
+3. **Agent local sécurisé** : protocole de transfert et signature/intégrité, validateur de chemins, backup/rollback, résultats transactionnels, activation manuelle explicite de la migration initiale.
+4. **Règles avancées** : modèle unifié de politiques IP/CIDR/pays/URI/UA/méthode/host, priorités, exceptions, TTL, instrumentation des refus réels.
+5. **Logs et carte** : diagnostic du fichier monté et reprise durable (problème réel d'avril/novembre), pause/reprise SSE, filtres enrichis, actions dérivées, GeoIP et performance ; 3D après fonctionnel 2D.
+6. **Menaces** : scoring configurable par signal, détail explicable, seuils, graphiques et stratégies de prévention en simulation d'abord.
+7. **Santé** : certificats, sondes des backends, ressources et alertes sans fuite d'information.
+8. **Durcissement et recette** : permissions, protections anti-lockout, transactions, restauration, UX mobile/desktop, tests E2E avec NPM de recette, CI et documentation.
+
+À chaque lot : branche issue de `dev`, PR ciblant `dev`, tests verts avant squash merge. Jamais de modification de `main` ni de rechargement du NPM réel sans approbation préalable.
+
+## Décisions de stack
+
+Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **FastAPI + Python 3.12, SQLite, JavaScript actuel et SSE, Docker Compose**. Le frontend pourra être isolé progressivement plutôt que de déclencher une réécriture React sans besoin démontré. La version Helm/OpenShift reste une cible ultérieure. Le service applicateur s'exécute sur l'hôte et reste indépendant du dashboard web.
