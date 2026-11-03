@@ -197,3 +197,18 @@ def test_blank_forms_have_inline_errors_and_action_buttons_have_status():
     assert "input.value !== 'PURGER'" in js
     assert "logs-purge-submit" in page
     assert "/db/purge-logs" in js
+
+
+def test_service_worker_never_caches_sensitive_api_and_refreshes_ui_first():
+    sw = Path("static/sw.js").read_text(encoding="utf-8")
+    assert "npm-security-shell-v0.6.1" in sw
+    assert "if (!SHELL_ASSETS.includes(url.pathname)) return;" in sw
+    assert "NETWORK_FIRST.has(url.pathname)" in sw
+    assert "fetch(req).then(response =>" in sw
+    assert "caches.match(req)" in sw
+    # Application endpoints must never be registered as shell assets.
+    shell = sw.split("const SHELL_ASSETS = [", 1)[1].split("];", 1)[0]
+    assert "/security-control" not in shell
+    assert "/db/" not in shell
+    assert "/blocklist" not in shell
+    assert "/auth/" not in shell
