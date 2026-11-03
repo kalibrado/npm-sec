@@ -1,3 +1,4 @@
+from services.security_rules import active_rules
 """Explicit, audited Nginx deployment jobs for an out-of-process host agent.
 
 The Web UI never runs Docker or executes nginx. The agent gets a fixed,
@@ -54,7 +55,7 @@ def _bundle(conn, settings):
     files = render_profile(settings)
     files["npm-blocklist.conf"] = render_nginx_blocklist(
         get_blocklist_items(conn), get_trusted_items(conn),
-        get_policy_modes(conn),
+        get_policy_modes(conn), active_rules(conn),
     )
     files["npm-server-guard.conf"] = render_nginx_server_guard()
     return files
