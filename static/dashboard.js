@@ -1542,6 +1542,73 @@ async function fetchJsonSafe(url) {
   return r.json();
 }
 
+async function loadPolicyModes() {
+  const target = document.getElementById('security-modes-list');
+  const status = document.getElementById('security-modes-status');
+  if (!target || !status) return;
+  try {
+    const data = await fetchJsonSafe('/security-control/policy/modes');
+    const globalMode = data.default_mode || 'block';
+    const overrides = data.overrides || [];
+    const state = data.policy?.state || 'not_configured';
+    status.dataset.state = state;
+    status.textContent = `Mode global : ${globalMode === 'observe' ? 'Observation' : 'Blocage'} · Déploiement : ${state} · ${overrides.length} domaine(s) avec mode spécifique`;
+    target.innerHTML = overrides.length ? overrides.map(item => `
+      <div class="security-mode-item">
+        <span><strong>${esc(item.host)}</strong> : ${item.mode === 'observe' ? 'Observation (sans 403)' : 'Blocage (403)'}</span>
+        <button type="button" class="list-action-btn" data-reset-mode="${esc(item.host)}">Réinitialiser</button>
+      </div>`).join('') : '<span class="security-mode-empty">Aucun mode particulier : tous les domaines héritent du mode global.</span>';
+  } catch (error) {
+    status.dataset.state = 'error';
+    status.textContent = 'Lecture des modes impossible.';
+    target.textContent = '';
+  }
+}
+
+async function savePolicyMode(event) {
+  event.preventDefault();
+  if (!requireAdminClient()) return;
+  const host = document.getElementById('security-modes-host')?.value.trim() || '';
+  const mode = document.getElementById('security-modes-mode')?.value || 'block';
+  if (mode === 'observe' && !confirm(
+    `Passer ${host || 'TOUS les domaines par défaut'} en OBSERVATION ? Après application Nginx, les règles ne renverront plus de 403 pour cette portée.`
+  )) return;
+
+  try {
+    const response = await adminFetch('/security-control/policy/modes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({host, mode})
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.detail || result.error || 'Mode non enregistré');
+    toast(`Mode ${mode} enregistré pour ${host || 'tous les domaines'}. Application Nginx en attente.`, 'success');
+    document.getElementById('security-modes-host').value = '';
+    await loadPolicyModes();
+    void loadSecurityControlOverview();
+  } catch (error) {
+    toast(error.message || 'Impossible de modifier le mode', 'danger');
+  }
+}
+
+async function resetPolicyMode(host) {
+  if (!requireAdminClient()) return;
+  if (!confirm(`Supprimer le mode spécifique de ${host} ? Ce domaine héritera du mode global à la prochaine application Nginx.`)) return;
+  try {
+    const response = await adminFetch(
+      '/security-control/policy/modes?host=' + encodeURIComponent(host),
+      {method: 'DELETE'}
+    );
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.detail || result.error || 'Réinitialisation refusée');
+    toast(`Mode spécifique retiré pour ${host}. Application Nginx en attente.`, 'success');
+    await loadPolicyModes();
+    void loadSecurityControlOverview();
+  } catch (error) {
+    toast(error.message || 'Réinitialisation impossible', 'danger');
+  }
+}
+
 async function simulateSavedSecurityPolicy(event) {
   event.preventDefault();
   if (!requireAdminClient()) return;
@@ -1560,6 +1627,7 @@ async function simulateSavedSecurityPolicy(event) {
     const result = await fetchJsonSafe(`/security-control/policy/preview?${params}`);
     const labels = {allow: 'Autorisation prévue', deny: 'Blocage prévu', unknown: 'Décision indéterminée'};
     const decision = result.predicted_decision || 'unknown';
+    const mode = result.enforcement_mode || 'block';
     const scope = result.policy?.state || 'not_configured';
     const rules = result.matching_block_rules || [];
     const trusts = result.trusted_matches || [];
@@ -1573,6 +1641,8 @@ async function simulateSavedSecurityPolicy(event) {
     container.dataset.decision = decision;
     container.innerHTML = `
       <div class="security-preview-decision">${esc(labels[decision] || 'Inconnu')}</div>
+      <p>Mode enregistré : <strong>${mode === 'observe' ? 'Observation, sans blocage 403' : 'Blocage'}</strong>
+      ${mode === 'observe' && result.would_deny ? '· Les règles auraient refusé cette requête en mode Blocage.' : ''}</p>
       <p>IP <strong>${esc(result.ip)}</strong> · Domaine <strong>${esc(result.host)}</strong>
          · Pays : ${esc(result.country_code || 'non renseigné')}</p>
       ${rules.length ? `<p>Règles correspondantes :</p><ul>${info}</ul>` : '<p>Aucune règle de refus ne correspond aux données fournies.</p>'}
@@ -1767,6 +1837,7 @@ async function loadSecurityLists() {
   securityListsLoading = true;
   void loadSecurityControlOverview();
   void loadSecuritySuspects();
+  void loadPolicyModes();
   const blockedBody = document.getElementById('lists-blocked-body');
   const trustedBody = document.getElementById('lists-trusted-body');
   const historyBody = document.getElementById('lists-history-body');
@@ -1999,6 +2070,13 @@ for (const id of ['suspects-hours', 'suspects-score']) {
 }
 const suspectsRefresh = document.getElementById('suspects-refresh');
 if (suspectsRefresh) suspectsRefresh.addEventListener('click', loadSecuritySuspects);
+const policyModesForm = document.getElementById('security-modes-form');
+if (policyModesForm) policyModesForm.addEventListener('submit', savePolicyMode);
+const policyModesList = document.getElementById('security-modes-list');
+if (policyModesList) policyModesList.addEventListener('click', event => {
+  const button = event.target.closest('button[data-reset-mode]');
+  if (button) void resetPolicyMode(button.dataset.resetMode);
+});
 const securityPreviewForm = document.getElementById('security-preview-form');
 if (securityPreviewForm) securityPreviewForm.addEventListener('submit', simulateSavedSecurityPolicy);
 const listsRefresh = document.getElementById('lists-refresh');
