@@ -28,4 +28,5 @@ jobs:
           LOG_FILE: /tmp/npm-sec-ci.log
         run: |
           python -m compileall -q .
+          node --check static/dashboard.js
           python -m pytest -q
