@@ -5424,3 +5424,33 @@ body[data-view="config"] #panel-config [data-config-card="profile"] {
   .nsd-profile-fields { grid-template-columns: minmax(0,1fr); }
   .nsd-profile-revision { flex-wrap: wrap; }
 }
+
+/* Policy editor groups mirror the server-side settings categories. */
+.nsd-settings-group {
+  min-width: 0;
+  margin: 0 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px;
+}
+.nsd-settings-group > legend {
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.nsd-settings-group-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+#nsd-profile-fields.nsd-profile-fields {
+  display: block;
+}
+.nsd-settings-group .nsd-profile-field small {
+  overflow-wrap: anywhere;
+}
+@media(max-width: 620px) {
+  .nsd-settings-group { padding: 8px; }
+  .nsd-settings-group-fields { grid-template-columns: minmax(0, 1fr); }
+}

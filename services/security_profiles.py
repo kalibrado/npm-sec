@@ -62,7 +62,109 @@ FIELDS = {
         "label": "Code de refus des filtres historiques",
         "description": "444 ferme la connexion sans réponse; 403 est un refus HTTP standard.",
     },
+    "rate_limit_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Activer le rate limiting",
+        "description": "Désactive l'application par serveur, sans supprimer la zone Nginx.",
+    },
+    "rate_limit_status": {
+        "type": "choice", "default": "429", "choices": ["429", "503"],
+        "label": "Code HTTP de limitation",
+        "description": "429 Too Many Requests (défaut) ou 503 Service Unavailable.",
+    },
+    "scanner_rules_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Activer la détection User-Agent scanner",
+        "description": "Active ou suspend les signatures scanners héritées.",
+    },
+    "geoip_auto_reload_hours": {
+        "type": "integer", "default": 3, "min": 1, "max": 24,
+        "label": "Rechargement GeoIP2 (heures)",
+        "description": "Fréquence de rafraîchissement des bases GeoIP2 Country et City.",
+    },
+    "real_ip_header": {
+        "type": "choice", "default": "X-Real-IP",
+        "choices": ["disabled", "X-Real-IP", "X-Forwarded-For"],
+        "label": "En-tête utilisé pour l'IP réelle",
+        "description": "Accepter uniquement depuis les proxys de confiance. Attention à l'usurpation d'IP.",
+    },
+    "trusted_proxy_networks": {
+        "type": "cidrs",
+        "default": ["192.168.1.0/24", "172.16.0.0/12", "10.0.0.0/8"],
+        "label": "Réseaux de reverse proxies de confiance",
+        "description": "Réseaux autorisés à déclarer l'IP cliente via real_ip_header. Réduire aux vrais proxys.",
+    },
+    "log_exclude_networks": {
+        "type": "cidrs",
+        "default": ["127.0.0.1/32", "192.168.1.0/24",
+                    "172.16.0.0/12", "10.0.0.0/8"],
+        "label": "Réseaux exclus des logs HTTP généraux",
+        "description": "Liste historique des adresses ignorées par access_log dans le contexte HTTP.",
+    },
+    "log_internal_requests": {
+        "type": "boolean", "default": True,
+        "label": "Journaliser les requêtes LAN dans les proxy hosts",
+        "description": "Par défaut, les logs de chaque proxy host incluent le trafic LAN.",
+    },
+    "custom_error_pages_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Pages d'erreur personnalisées",
+        "description": "Utilise les pages /data/nginx/error_pages/ghost/ existantes.",
+    },
+    "sensitive_path_protection_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Protéger les chemins et fichiers sensibles",
+        "description": "Masque .env, .git et chemins de scanners PHP. Désactivation déconseillée.",
+    },
+    "proxy_buffering_enabled": {
+        "type": "boolean", "default": False,
+        "label": "Buffering du reverse proxy",
+        "description": "Éteint par défaut dans ta configuration actuelle.",
+    },
+    "proxy_intercept_errors_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Intercepter les erreurs des backends",
+        "description": "Permet les pages d'erreurs personnalisées Nginx.",
+    },
+    "debug_geo_headers_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Publier les en-têtes GeoIP de diagnostic",
+        "description": "Hérité : expose notamment X-Visitor-IP. Désactivation recommandée après recette.",
+    },
+    "security_response_headers_enabled": {
+        "type": "boolean", "default": False,
+        "label": "Ajouter des en-têtes de sécurité HTTP",
+        "description": "Ajoute nosniff et Referrer-Policy. À tester avec les applications proxifiées.",
+    },
 }
+GROUPS = {
+    "Débit et limitation": (
+        "rate_limit_rps", "rate_limit_burst", "rate_limit_enabled",
+        "rate_limit_status",
+    ),
+    "Pays, GeoIP2 et IP réelle": (
+        "allowed_countries", "local_allowed_networks",
+        "legacy_country_filter_enabled", "geoip_auto_reload_hours",
+        "real_ip_header", "trusted_proxy_networks",
+    ),
+    "Bots, chemins et refus": (
+        "scanner_user_agents", "scanner_rules_enabled",
+        "block_empty_user_agent", "sensitive_path_protection_enabled",
+        "legacy_refusal_status",
+    ),
+    "Journalisation": (
+        "log_exclude_networks", "log_internal_requests",
+    ),
+    "Proxy, erreurs et en-têtes": (
+        "custom_error_pages_enabled", "proxy_buffering_enabled",
+        "proxy_intercept_errors_enabled", "debug_geo_headers_enabled",
+        "security_response_headers_enabled",
+    ),
+}
+for group_name, keys in GROUPS.items():
+    for key in keys:
+        FIELDS[key]["group"] = group_name
+
 DEFAULTS = {key: field["default"] for key, field in FIELDS.items()}
 
 
@@ -153,7 +255,10 @@ def render_profile(settings: dict) -> dict[str, str]:
         "map $http_user_agent $blocked_agent {",
         "map $geoip2_data_country_code $allowed_country {\n" + map_body + "\n}",
     )
-    agents = "\n".join(f"    ~*{token} 1;" for token in s["scanner_user_agents"])
+    agents = "\n".join(
+        f"    ~*{token} 1;" for token in
+        (s["scanner_user_agents"] if s["scanner_rules_enabled"] else [])
+    )
     http = swap(
         http, "map $http_user_agent $blocked_agent {",
         "map $http_user_agent $npm_security_empty_ua {",
@@ -166,10 +271,106 @@ def render_profile(settings: dict) -> dict[str, str]:
         "map $http_user_agent $npm_security_empty_ua {\n    default 0;\n" +
         ('    "" 1;\n' if s["block_empty_user_agent"] else "") + "}",
     )
+    http = http.replace(
+        "auto_reload 3h;", f"auto_reload {s['geoip_auto_reload_hours']}h;"
+    )
+    trusted_proxies = "\n".join(
+        f"set_real_ip_from {network};" for network in s["trusted_proxy_networks"]
+    )
+    if s["real_ip_header"] == "disabled":
+        real_ip_section = (
+            "# Real IP restoration explicitly disabled; no trusted forwarded headers."
+        )
+    else:
+        real_ip_section = (
+            "# Trusted proxy sources. Limit them to actual reverse proxies.\n"
+            + (trusted_proxies + "\n" if trusted_proxies else "")
+            + f"real_ip_header {s['real_ip_header']};"
+        )
+    http = swap(
+        http, "# Preserve existing trust boundaries",
+        "geo $remote_addr $exclude_from_log {",
+        real_ip_section,
+    )
+    log_networks = "\n".join(
+        f"    {network} 0;" for network in s["log_exclude_networks"]
+    )
+    http = swap(
+        http, "geo $remote_addr $exclude_from_log {",
+        "# NPM SEC's dynamic policy is defined once",
+        "geo $remote_addr $exclude_from_log {\n    default 1;"
+        + ("\n" + log_networks if log_networks else "") + "\n}",
+    )
+
+    if not s["log_internal_requests"]:
+        server = server.replace(
+            "access_log /data/logs/access-geo-detailed.log detailed_visitor;",
+            "access_log /data/logs/access-geo-detailed.log detailed_visitor if=$exclude_from_log;",
+        ).replace(
+            "access_log /data/logs/access-custom.log custom;",
+            "access_log /data/logs/access-custom.log custom if=$exclude_from_log;",
+        )
+
+    server = server.replace(
+        "limit_req_status 429;", f"limit_req_status {s['rate_limit_status']};"
+    )
+    if not s["rate_limit_enabled"]:
+        server = server.replace(
+            f"limit_req zone=req_limit_per_ip burst={s['rate_limit_burst']} nodelay;",
+            "# Rate limit disabled from the NSD security profile.",
+        )
+    server = server.replace(
+        "proxy_buffering off;",
+        "proxy_buffering on;" if s["proxy_buffering_enabled"] else "proxy_buffering off;",
+    ).replace(
+        "proxy_intercept_errors on;",
+        "proxy_intercept_errors on;" if s["proxy_intercept_errors_enabled"]
+        else "proxy_intercept_errors off;",
+    )
+
+    if not s["custom_error_pages_enabled"]:
+        start = server.find("error_page 400 /error_pages/400.html;")
+        end = server.find("\nlocation ~ /", start)
+        if start < 0 or end < start:
+            raise RuntimeError("Section des pages d'erreurs inattendue")
+        server = server[:start] + "# Custom error pages disabled\n" + server[end:]
+
+    if not s["sensitive_path_protection_enabled"]:
+        start = server.find("\nlocation ~ /")
+        if start < 0:
+            raise RuntimeError("Section des chemins sensibles inattendue")
+        server = server[:start] + "\n# Sensitive-path filters disabled\n"
+
+    if not s["debug_geo_headers_enabled"]:
+        diagnostic_headers = (
+            "X-Debug-Country", "X-Country-Code", "X-Country-Name",
+            "X-City", "X-Visitor-IP", "X-Served-By",
+        )
+        http = "".join(
+            line for line in http.splitlines(keepends=True)
+            if not any(line.lstrip().startswith(f"add_header {name} ")
+                       for name in diagnostic_headers)
+        )
+    if s["security_response_headers_enabled"]:
+        server += (
+            "\nadd_header X-Content-Type-Options nosniff always;\n"
+            "add_header Referrer-Policy strict-origin-when-cross-origin always;\n"
+        )
+
     return {
         "http-security.conf": http,
         "server-security.conf": server,
     }
+
+
+def hydrate_revision_settings(stored: dict) -> dict:
+    """Load old immutable revisions without rewriting or corrupting history."""
+    if not isinstance(stored, dict) or not set(stored).issubset(FIELDS):
+        raise RuntimeError("Contenu de révision incompatible avec le schéma")
+    from copy import deepcopy
+    values = deepcopy(DEFAULTS)
+    values.update(stored)
+    return normalize_settings(values)
 
 
 def bundle_hash(files: dict[str, str]) -> str:
@@ -215,7 +416,7 @@ def load_active(conn=None):
             ).fetchone()
     if not row:
         return 0, normalize_settings(DEFAULTS)
-    return row["id"], json.loads(row["payload"])
+    return row["id"], hydrate_revision_settings(json.loads(row["payload"]))
 
 
 def history(limit=20):
@@ -269,6 +470,6 @@ def rollback_settings(target: int, expected_revision: int, author: str):
     if not row:
         raise HTTPException(status_code=404, detail="Révision inexistante")
     return save_settings(
-        json.loads(row["payload"]), expected_revision, author,
+        hydrate_revision_settings(json.loads(row["payload"])), expected_revision, author,
         f"Restauration de la révision {target}", restore_from=target,
     )

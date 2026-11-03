@@ -74,6 +74,40 @@ Tous ces endpoints exigent le rôle administrateur et renvoient `403`
 aux comptes lecture seule. Les paramètres enregistrés sont **des
 brouillons** : aucun bouton ne déclenche de reload Nginx.
 
+## Extension : 22 réglages directement pilotés en UI
+
+La deuxième itération ajoute 14 paramètres typés au premier socle.
+La page Configuration les regroupe maintenant en cinq familles
+lisibles : débit et limitation, pays/GeoIP2/IP réelle, bots et chemins,
+journalisation, proxy/en-têtes/pages d'erreur.
+
+La liste inclut désormais : activation du rate limiting et son code
+HTTP, activation des signatures scanner, durée de rafraîchissement
+GeoIP2, en-tête servant à déterminer l'IP réelle et réseaux de
+reverse proxies de confiance, réseaux à exclure du journal,
+journalisation des requêtes LAN dans les proxy hosts,
+activation des pages d'erreur et des règles de chemins sensibles,
+buffering proxy, interception des erreurs, en-têtes GeoIP de diagnostic
+et ajout d'en-têtes HTTP de sécurité optionnels.
+
+Ces champs conservent par défaut le comportement historique communiqué
+le 03/11/2026. En particulier, la journalisation LAN reste active au
+niveau `server_proxy.conf` même si `http_top.conf` les excluait
+déjà. L'UI peut désormais choisir explicitement de les exclure aussi
+sur les proxy hosts.
+
+**Attention aux IP réelles :** la confiance actuelle donnée aux
+réseaux privés est très large. La validation interdit les réseaux
+universels, mais l'administrateur doit sélectionner les adresses de
+ses vrais reverse proxies. Un header provenant d'un client ou d'un
+proxy non fiable peut fausser le géoblocage.
+
+**Compatibilité ascendante :** les anciens snapshots immuables
+enregistrés avec huit champs continuent à s'afficher et peuvent être
+restaurés. Les nouveaux champs manquants sont hydratés avec leurs
+valeurs par défaut, sans jamais réécrire les anciens événements
+d'audit. Les nouvelles révisions contiennent l'ensemble des champs.
+
 ## Limites documentées et étapes suivantes
 
 Le profil de référence couvre également les autres directives héritées
