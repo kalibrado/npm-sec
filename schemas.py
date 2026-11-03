@@ -27,3 +27,4 @@ class BlockEntry(BaseModel):
     type: str
     value: str
     reason: Optional[str] = ""
+    duration_minutes: Optional[int] = None
