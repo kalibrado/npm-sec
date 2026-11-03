@@ -26,7 +26,11 @@ def parse_line(line: str) -> dict | None:
         # JSON log_format, are eligible for observation incidents.
         policy_mode = data.get("npm_security_policy_mode")
         flag = data.get("npm_security_would_deny")
-        if policy_mode not in {"observe", "block"} or flag not in {"0", "1", 0, 1} or isinstance(flag, bool):
+        valid_flag = (
+            (isinstance(flag, str) and flag in ("0", "1"))
+            or (isinstance(flag, int) and not isinstance(flag, bool) and flag in (0, 1))
+        )
+        if not isinstance(policy_mode, str) or policy_mode not in ("observe", "block") or not valid_flag:
             policy_mode, would_deny = None, None
         else:
             would_deny = int(flag)
@@ -38,7 +42,7 @@ def parse_line(line: str) -> dict | None:
             "country_code": data.get("country_code", "XX"),
             "country_name": data.get("country_name", "Inconnu"),
             "city": data.get("city", "-"),
-            "host": data.get("host", "-"),
+            "host": str(data.get("host") or "-").strip().lower().rstrip("."),
             "method": data.get("method", "-"),
             "referer": data.get("http_referer", ""),
             "user_agent": data.get("http_user_agent", ""),
@@ -55,7 +59,7 @@ def parse_line(line: str) -> dict | None:
             "request_time": float(data.get("request_time", 0) or 0),
             "threat": classify_threat(data.get("uri"), data.get("http_user_agent")),
         }
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
         return None
 
 
