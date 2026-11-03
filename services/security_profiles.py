@@ -62,6 +62,80 @@ FIELDS = {
         "label": "Code de refus des filtres historiques",
         "description": "444 ferme la connexion sans réponse; 403 est un refus HTTP standard.",
     },
+    "rate_limit_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Activer le rate limiting",
+        "description": "Désactive l'application par serveur, sans supprimer la zone Nginx.",
+    },
+    "rate_limit_status": {
+        "type": "choice", "default": "429", "choices": ["429", "503"],
+        "label": "Code HTTP de limitation",
+        "description": "429 Too Many Requests (défaut) ou 503 Service Unavailable.",
+    },
+    "scanner_rules_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Activer la détection User-Agent scanner",
+        "description": "Active ou suspend les signatures scanners héritées.",
+    },
+    "geoip_auto_reload_hours": {
+        "type": "integer", "default": 3, "min": 1, "max": 24,
+        "label": "Rechargement GeoIP2 (heures)",
+        "description": "Fréquence de rafraîchissement des bases GeoIP2 Country et City.",
+    },
+    "real_ip_header": {
+        "type": "choice", "default": "X-Real-IP",
+        "choices": ["disabled", "X-Real-IP", "X-Forwarded-For"],
+        "label": "En-tête utilisé pour l'IP réelle",
+        "description": "Accepter uniquement depuis les proxys de confiance. Attention à l'usurpation d'IP.",
+    },
+    "trusted_proxy_networks": {
+        "type": "cidrs",
+        "default": ["192.168.1.0/24", "172.16.0.0/12", "10.0.0.0/8"],
+        "label": "Réseaux de reverse proxies de confiance",
+        "description": "Réseaux autorisés à déclarer l'IP cliente via real_ip_header. Réduire aux vrais proxys.",
+    },
+    "log_exclude_networks": {
+        "type": "cidrs",
+        "default": ["127.0.0.1/32", "192.168.1.0/24",
+                    "172.16.0.0/12", "10.0.0.0/8"],
+        "label": "Réseaux exclus des logs HTTP généraux",
+        "description": "Liste historique des adresses ignorées par access_log dans le contexte HTTP.",
+    },
+    "log_internal_requests": {
+        "type": "boolean", "default": True,
+        "label": "Journaliser les requêtes LAN dans les proxy hosts",
+        "description": "Par défaut, les logs de chaque proxy host incluent le trafic LAN.",
+    },
+    "custom_error_pages_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Pages d'erreur personnalisées",
+        "description": "Utilise les pages /data/nginx/error_pages/ghost/ existantes.",
+    },
+    "sensitive_path_protection_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Protéger les chemins et fichiers sensibles",
+        "description": "Masque .env, .git et chemins de scanners PHP. Désactivation déconseillée.",
+    },
+    "proxy_buffering_enabled": {
+        "type": "boolean", "default": False,
+        "label": "Buffering du reverse proxy",
+        "description": "Éteint par défaut dans ta configuration actuelle.",
+    },
+    "proxy_intercept_errors_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Intercepter les erreurs des backends",
+        "description": "Permet les pages d'erreurs personnalisées Nginx.",
+    },
+    "debug_geo_headers_enabled": {
+        "type": "boolean", "default": True,
+        "label": "Publier les en-têtes GeoIP de diagnostic",
+        "description": "Hérité : expose notamment X-Visitor-IP. Désactivation recommandée après recette.",
+    },
+    "security_response_headers_enabled": {
+        "type": "boolean", "default": False,
+        "label": "Ajouter des en-têtes de sécurité HTTP",
+        "description": "Ajoute nosniff et Referrer-Policy. À tester avec les applications proxifiées.",
+    },
 }
 DEFAULTS = {key: field["default"] for key, field in FIELDS.items()}
 
