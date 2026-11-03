@@ -1,6 +1,6 @@
 import sqlite3
 
-from  config import AUTO_BAN_DRY_RUN, AUTO_BAN_ENABLED, AUTO_BAN_SCORE, DISCORD_THREAT_ALERTS_ENABLED, THREAT_AUTO_BLOCK_THRESHOLD
+from  config import AUTO_BAN_DRY_RUN, AUTO_BAN_ENABLED, AUTO_BAN_SCORE, AUTO_BAN_DURATION_MINUTES, DISCORD_THREAT_ALERTS_ENABLED, THREAT_AUTO_BLOCK_THRESHOLD
 from  services.discord import send_threat_discord_alert
 from  services.export import get_blocklist_items, write_blocklist_exports
 from  services.nginx import reload_nginx_if_enabled
@@ -35,8 +35,13 @@ def maybe_auto_ban(event: dict, conn: sqlite3.Connection) -> bool:
         return False
 
     conn.execute(
-        "INSERT OR IGNORE INTO blocklist (type, value, reason) VALUES ('ip', ?, ?)",
-        [ip, reason],
+        """INSERT INTO blocklist (type, value, reason, expires_at)
+           VALUES ('ip', ?, ?, datetime('now', ?))
+           ON CONFLICT(type, value) DO UPDATE SET
+             reason=excluded.reason,
+             expires_at=excluded.expires_at,
+             created_at=datetime('now')""",
+        [ip, reason, f"+{AUTO_BAN_DURATION_MINUTES} minutes"],
     )
     record_ban_event(conn, ip, "ip", "auto-block", reason)
     event["auto_blocked"] = True
