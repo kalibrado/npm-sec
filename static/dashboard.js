@@ -1810,7 +1810,7 @@ async function loadNpmHealth() {
 
 async function loadDetailedHealth() {
   try {
-    const d = await fetch('/health').then(r=>r.json());
+    const d = await fetch('/health/details').then(r=>r.json());
     const cfg = document.getElementById('config-grid');
     if (!cfg) return;
     const [dbTxt, dbCls] = boolStatus(d.db_ok);
