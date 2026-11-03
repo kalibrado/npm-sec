@@ -1232,12 +1232,18 @@ async function addBlock() {
 }
 
 async function removeBlock(id) {
+  if (!requireAdminClient()) return;
   try {
-    await adminFetch(`/blocklist/${encodeURIComponent(id)}`,{method:'DELETE'});
-    toast('Entrée supprimée','info');
-    loadBlocklist();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch { toast('Erreur','danger'); }
+    const r = await adminFetch(`/blocklist/${encodeURIComponent(id)}`, {method:'DELETE'});
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(apiErrorMessage(data, 'Suppression refusée'));
+    toast('Règle supprimée. Application Nginx en attente.', 'success');
+    await loadBlocklist();
+    if (document.body.dataset.view === 'lists') await loadSecurityLists();
+    if (document.body.dataset.view === 'control') void loadSecurityControl();
+  } catch (e) {
+    toast(e.message || 'Suppression impossible', 'danger');
+  }
 }
 
 document.getElementById('bl-add').addEventListener('click', addBlock);
@@ -1491,36 +1497,52 @@ async function loadBanEvents() {
 }
 
 function openExport(kind) {
+  if (!requireAdminClient()) return;
   const url = kind === 'nginx' ? '/blocklist/export/nginx' : '/blocklist/export/json';
+  toast(`Ouverture de l'export ${kind === 'nginx' ? 'Nginx' : 'JSON'} dans un nouvel onglet…`, 'info');
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function applyBlocklistExport(reload = false) {
-  const status = document.getElementById('bl-export-status');
-  if (status) status.textContent = reload ? 'Écriture + reload demandé…' : 'Écriture des fichiers…';
-  try {
-    const r = await adminFetch(`/blocklist/export/apply?reload=${reload ? 'true' : 'false'}`, {method:'POST'});
-    const d = await r.json();
-    if (!r.ok || d.error) {
-      const msg = d.detail || d.error || 'Erreur export';
-      if (status) status.textContent = msg;
-      toast(msg, 'danger');
-      return;
-    }
-    const exportInfo = d.export || {};
-    const reloadInfo = d.reload || {};
-    const msg = `Export OK · ${exportInfo.count ?? 0} entrées · ${exportInfo.nginx_path || 'nginx conf'}`;
-    if (status) {
-      status.innerHTML = `${esc(msg)}<br><span>${esc(reloadInfo.message || (reloadInfo.executed ? `reload code ${reloadInfo.returncode}` : 'reload non exécuté'))}</span>`;
-    }
-    toast(reload ? 'Export appliqué, reload traité' : 'Fichiers exportés', reloadInfo.ok === false ? 'warning' : 'success');
-    loadBanEvents();
-  } catch (e) {
-    if (status) status.textContent = "Erreur réseau pendant l'export";
-    toast("Erreur réseau pendant l'export", 'danger');
+  if (!requireAdminClient()) return;
+  if (reload && !confirm('Demander un rechargement Nginx ? Le dashboard ne peut recharger NPM que si le mécanisme d’administration est explicitement activé.')) {
+    toast('Rechargement annulé : aucun fichier modifié.', 'info');
+    return;
   }
+  const status = document.getElementById('bl-export-status');
+  const buttonId = reload ? 'bl-apply-reload' : 'bl-apply-export';
+  await withBusyButton(buttonId, 'Écriture…', async () => {
+    if (status) {
+      status.dataset.state = 'loading';
+      status.textContent = 'Génération des fichiers en cours…';
+    }
+    try {
+      const r = await adminFetch(`/blocklist/export/apply?reload=${reload ? 'true' : 'false'}`, {method:'POST'});
+      const d = await r.json();
+      if (!r.ok || d.error || d.status !== 'ok') throw new Error(apiErrorMessage(d, 'Erreur export'));
+      const info = d.export || {};
+      const reloaded = d.reload?.executed === true && d.reload?.ok !== false;
+      const paths = [info.nginx_path, info.server_guard_path, info.json_path].filter(Boolean);
+      const reloadMessage = reload
+        ? (reloaded ? 'Rechargement confirmé' : `Aucun rechargement exécuté : ${d.reload?.message || 'mécanisme désactivé'}`)
+        : 'Aucun rechargement Nginx demandé.';
+      const message = `Fichiers générés : ${paths.length ? paths.join(' · ') : 'exports NPM Security'}.
+${reloadMessage}`;
+      if (status) {
+        status.dataset.state = 'success';
+        status.textContent = message;
+      }
+      toast(reloaded || !reload ? 'Exports Nginx et garde serveur générés' : 'Exports générés, Nginx non rechargé', reloaded || !reload ? 'success' : 'warning', 5500);
+      await loadBanEvents();
+    } catch (e) {
+      if (status) {
+        status.dataset.state = 'error';
+        status.textContent = e.message || 'Erreur pendant la génération des exports.';
+      }
+      toast(e.message || 'Erreur pendant la génération des exports', 'danger', 5500);
+    }
+  });
 }
-
 
 async function loadTrusted() {
   try {
@@ -1583,15 +1605,20 @@ async function addTrusted() {
 }
 
 async function removeTrusted(id) {
+  if (!requireAdminClient()) return;
   try {
-    await adminFetch(`/trusted/${encodeURIComponent(id)}`, {method:'DELETE'});
-    toast('Entrée whitelist supprimée', 'info');
-    loadTrusted();
+    const r = await adminFetch(`/trusted/${encodeURIComponent(id)}`, {method:'DELETE'});
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(apiErrorMessage(data, 'Suppression refusée'));
+    toast('Exception de confiance supprimée', 'success');
+    await loadTrusted();
     loadBanEvents();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch { toast('Erreur suppression whitelist', 'danger'); }
+    if (document.body.dataset.view === 'lists') await loadSecurityLists();
+    if (document.body.dataset.view === 'control') void loadSecurityControl();
+  } catch(e) {
+    toast(e.message || 'Erreur de suppression', 'danger');
+  }
 }
-
 
 // ═══════════════════════════════════════════════════════════
 //  PATCH 5.1 · SECURITY LISTS DEDICATED VIEW
@@ -1700,8 +1727,19 @@ async function simulateSavedSecurityPolicy(event) {
   const ip = document.getElementById('security-preview-ip')?.value.trim() || '';
   const host = document.getElementById('security-preview-host')?.value.trim() || '';
   const country = document.getElementById('security-preview-country')?.value.trim() || '';
-  if (!container || !ip || !host) return;
-
+  if (!container) return;
+  if (!ip || !host) {
+    const missing = !ip ? 'security-preview-ip' : 'security-preview-host';
+    const message = 'La simulation nécessite une adresse IP et un domaine cible.';
+    container.dataset.decision = 'error';
+    container.textContent = message;
+    document.getElementById(missing)?.setAttribute('aria-invalid', 'true');
+    document.getElementById(missing)?.focus();
+    toast(message, 'warning', 5500);
+    return;
+  }
+  document.getElementById('security-preview-ip')?.removeAttribute('aria-invalid');
+  document.getElementById('security-preview-host')?.removeAttribute('aria-invalid');
   const params = new URLSearchParams({ip, host});
   if (country) params.set('country_code', country);
   container.textContent = 'Évaluation des règles enregistrées…';
@@ -1738,6 +1776,7 @@ async function simulateSavedSecurityPolicy(event) {
   } catch (error) {
     container.dataset.decision = 'error';
     container.textContent = error.message || 'Impossible de simuler cette politique.';
+    toast(container.textContent, 'danger');
   }
 }
 
