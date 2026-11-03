@@ -1585,10 +1585,130 @@ async function loadSecurityControlOverview() {
   }
 }
 
+let securitySuspectsLoading = false;
+
+async function loadSecuritySuspects() {
+  const body = document.getElementById('suspects-body');
+  if (!body || securitySuspectsLoading) return;
+  securitySuspectsLoading = true;
+  const note = document.getElementById('suspects-policy-note');
+  const hours = Number(document.getElementById('suspects-hours')?.value || 24);
+  const minScore = Number(document.getElementById('suspects-score')?.value || 25);
+  body.innerHTML = '<tr><td colspan="7">Chargement des IP suspectes…</td></tr>';
+
+  try {
+    const d = await fetchJsonSafe(
+      `/security-control/suspects?hours=${hours}&min_score=${minScore}&limit=30`
+    );
+    const state = d.policy_state || 'not_configured';
+    if (note) {
+      note.dataset.state = state;
+      note.textContent = state === 'applied'
+        ? 'Dernier rechargement Nginx confirmé. Les événements restent des signaux à analyser, pas des verdicts.'
+        : 'Les règles visibles ici sont enregistrées, mais leur application dans Nginx n’est pas confirmée.';
+    }
+    const items = d.items || [];
+    body.innerHTML = items.length ? items.map(item => {
+      const rule = item.block_rule;
+      const ip = esc(item.ip);
+      const label = item.trusted
+        ? '🛡️ Confiance / exception'
+        : rule ? `⛔ Règle ${esc(rule.type)} : ${esc(rule.value)}` : 'Aucune';
+      const kinds = [
+        item.brute_force ? `${Number(item.brute_force)} brute force` : '',
+        item.scans ? `${Number(item.scans)} scans HTTP` : ''
+      ].filter(Boolean).join(' · ') || 'Autres signaux';
+      const canBlock = !item.trusted && !rule;
+      const directBlock = Number(item.direct_block_id || 0);
+      const action = directBlock
+        ? `<button type="button" class="list-action-btn" data-suspect-action="unblock" data-ip="${ip}" data-id="${directBlock}">Débloquer</button>`
+        : canBlock
+          ? `<button type="button" class="list-action-btn suspect-danger" data-suspect-action="block" data-ip="${ip}">Bloquer 1 h</button>`
+          : '';
+      const trust = !item.trusted && !rule
+        ? `<button type="button" class="list-action-btn" data-suspect-action="trust" data-ip="${ip}">Confiance</button>`
+        : '';
+      return `<tr>
+        <td class="ip-cell">${ip}</td>
+        <td><strong class="suspect-score">${Number(item.max_score || 0)}</strong>/100</td>
+        <td>${Number(item.signals || 0)}</td>
+        <td>${esc(kinds)}</td>
+        <td>${esc(item.host || '—')}<small class="suspect-country">${esc(item.country_code || '—')}</small></td>
+        <td>${label}</td>
+        <td class="suspect-actions">
+          <button type="button" class="list-action-btn" data-suspect-action="inspect" data-ip="${ip}">Analyser</button>
+          ${action}${trust}
+        </td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="7">Aucun signal suspect dans cette période et à ce seuil.</td></tr>';
+  } catch (e) {
+    if (note) {
+      note.dataset.state = 'error';
+      note.textContent = 'Impossible de charger les IP suspectes.';
+    }
+    body.innerHTML = '<tr><td colspan="7">Erreur de chargement des menaces.</td></tr>';
+  } finally {
+    securitySuspectsLoading = false;
+  }
+}
+
+async function handleSuspectAction(event) {
+  const button = event.target.closest('button[data-suspect-action]');
+  if (!button || !requireAdminClient()) return;
+  const action = button.dataset.suspectAction;
+  const ip = button.dataset.ip;
+  if (!ip) return;
+
+  if (action === 'inspect') {
+    showIPProfile(ip);
+    return;
+  }
+
+  const prompts = {
+    block: `Bloquer ${ip} pendant 1 heure ? La règle sera enregistrée mais sa prise d'effet dépendra du rechargement NPM.`,
+    trust: `Ajouter ${ip} aux IP de confiance ? Elle sera exclue du ban automatique.`,
+    unblock: `Retirer le blocage direct de ${ip} ? La modification restera à appliquer dans NPM.`
+  };
+  if (!prompts[action] || !confirm(prompts[action])) return;
+  button.disabled = true;
+
+  try {
+    let url;
+    let options;
+    if (action === 'block') {
+      url = `/block_ip/${encodeURIComponent(ip)}?duration_minutes=60`;
+      options = {method: 'POST'};
+    } else if (action === 'trust') {
+      url = '/trusted';
+      options = {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: 'ip', value: ip, reason: 'Trusted via security control'})
+      };
+    } else {
+      const id = Number(button.dataset.id);
+      if (!Number.isSafeInteger(id) || id < 1) throw new Error('ID de règle incorrect');
+      url = `/blocklist/${id}`;
+      options = {method: 'DELETE'};
+    }
+    const response = await adminFetch(url, options);
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.detail || result.error || 'Échec de l’action');
+    toast(`Décision enregistrée pour ${ip}. Application Nginx à vérifier.`, 'success');
+    await loadSecuritySuspects();
+    loadSecurityLists();
+  } catch (err) {
+    toast(err.message || 'Action impossible', 'danger');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function loadSecurityLists() {
   if (securityListsLoading) return;
   securityListsLoading = true;
   void loadSecurityControlOverview();
+  void loadSecuritySuspects();
   const blockedBody = document.getElementById('lists-blocked-body');
   const trustedBody = document.getElementById('lists-trusted-body');
   const historyBody = document.getElementById('lists-history-body');
@@ -1810,6 +1930,14 @@ const trustedInput = document.getElementById('trusted-input');
 if (trustedInput) trustedInput.addEventListener('keydown', e => { if(e.key==='Enter') addTrusted(); });
 
 document.querySelectorAll('[data-list-tab]').forEach(btn => btn.addEventListener('click', () => applyListTab(btn.dataset.listTab)));
+const suspectsBody = document.getElementById('suspects-body');
+if (suspectsBody) suspectsBody.addEventListener('click', handleSuspectAction);
+for (const id of ['suspects-hours', 'suspects-score']) {
+  const filter = document.getElementById(id);
+  if (filter) filter.addEventListener('change', loadSecuritySuspects);
+}
+const suspectsRefresh = document.getElementById('suspects-refresh');
+if (suspectsRefresh) suspectsRefresh.addEventListener('click', loadSecuritySuspects);
 const listsRefresh = document.getElementById('lists-refresh');
 if (listsRefresh) listsRefresh.addEventListener('click', loadSecurityLists);
 const listsBlockAdd = document.getElementById('lists-block-add');
