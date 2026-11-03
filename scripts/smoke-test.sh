@@ -40,6 +40,7 @@ check_admin /npm-health
 check_admin /metrics
 check_admin /threats
 check_admin /ban-events
-post_admin /threats/simulate-autoban
+check_admin /threats/simulate-autoban
+check_admin /threat-intel/bruteforce
 
 echo "✅ smoke-test OK"
