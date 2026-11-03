@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from  config import ALLOWED_ORIGINS
+from  config import ALLOWED_ORIGINS, validate_runtime_config
 from  routers import admin, auth, blocklist, health, logs, threats
 from  database import init_db
 from  routers import widget
@@ -47,6 +47,7 @@ async def dashboard(request: Request):
 async def startup():
     if not (TEMPLATES_DIR / DASHBOARD_TEMPLATE).exists():
         raise RuntimeError(f"Template manquant: {TEMPLATES_DIR / DASHBOARD_TEMPLATE}")
+    validate_runtime_config()
     init_db()
     import_existing_logs()
     start_background_tasks()
