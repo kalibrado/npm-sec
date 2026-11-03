@@ -169,6 +169,7 @@ error_log stderr warn;
 pid {tmp_path / 'nginx.pid'};
 events {{ worker_connections 16; }}
 http {{
+    access_log /dev/null;
     map $host $geoip2_data_country_code {{ default US; }}
     include {policy};
     server {{
