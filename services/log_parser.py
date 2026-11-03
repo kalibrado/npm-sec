@@ -1,3 +1,4 @@
+from services.security_rules import active_rules
 import asyncio
 import json
 import time
@@ -129,7 +130,7 @@ def insert_log(event: dict) -> dict:
         if auto_banned and AUTO_BAN_EXPORT_APPLY:
             # Export after commit so the generated files see the new blocklist row.
             items = get_blocklist_items(conn)
-            write_blocklist_exports(items, get_trusted_items(conn), get_policy_modes(conn))
+            write_blocklist_exports(items, get_trusted_items(conn), get_policy_modes(conn), active_rules(conn))
             if AUTO_BAN_RELOAD:
                 reload_nginx_if_enabled()
     invalidate_stats_cache()
