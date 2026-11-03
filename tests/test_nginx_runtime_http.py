@@ -6,6 +6,7 @@ The forwarded IP and country headers are accepted solely by this test
 fixture; production must derive them from trusted proxies and GeoIP2.
 """
 import http.client
+import json
 import shutil
 import socket
 import subprocess
@@ -14,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from services import export
+import database
+from services import export, ingestion, observation
 
 
 HOST_CLOUD = "cloud.kaliorbis.fr"
@@ -58,6 +60,7 @@ def nginx_policy_server(tmp_path, request):
 
     conf = tmp_path / "nginx.conf"
     nginx_log = tmp_path / "nginx-error.log"
+    access_log = tmp_path / "nginx-access.jsonl"
     # Realip is deliberately restricted to loopback, where this test
     # runs. Country is a test-only GeoIP2 stub, not a production setting.
     conf.write_text(
@@ -66,7 +69,6 @@ error_log {nginx_log} notice;
 pid {tmp_path / "nginx.pid"};
 events {{ worker_connections 64; }}
 http {{
-    access_log off;
     set_real_ip_from 127.0.0.1;
     real_ip_header X-Forwarded-For;
 
@@ -78,6 +80,23 @@ http {{
     }}
 
     include {http_snippet};
+    map $npm_security_deny $npm_sec_allowed {{
+        default "yes";
+        1 "no";
+    }}
+    log_format security_json escape=json
+        '{{"timestamp":"$time_iso8601",'
+        '"remote_addr":"$remote_addr",'
+        '"host":"$host",'
+        '"uri":"$request_uri",'
+        '"status":"$status",'
+        '"allowed":"$npm_sec_allowed",'
+        '"http_user_agent":"$http_user_agent",'
+        '"country_code":"$geoip2_data_country_code",'
+        '"npm_security_policy_mode":"$npm_security_policy_mode",'
+        '"npm_security_would_deny":"$npm_security_would_deny"}}';
+    access_log {access_log} security_json;
+
     server {{
         listen 127.0.0.1:{port};
         server_name {HOST_CLOUD};
@@ -123,7 +142,7 @@ http {{
             assert process.poll() is None, (
                 f"Nginx exited early: {nginx_log.read_text() if nginx_log.exists() else ''}"
             )
-            yield port, request.param
+            yield port, request.param, access_log
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -176,7 +195,7 @@ def request_status(port, ip, host, country="FR"):
     ],
 )
 def test_nginx_real_http_policy_decision(nginx_policy_server, ip, host, country, expected):
-    port, mode = nginx_policy_server
+    port, mode, _ = nginx_policy_server
     actual = request_status(port, ip, host, country)
     # Two independent configurations demonstrate both an exact-host
     # OBSERVE override and a global OBSERVE default with a BLOCK exception.
@@ -186,3 +205,85 @@ def test_nginx_real_http_policy_decision(nginx_policy_server, ip, host, country,
         f"mode={mode}, host={host}, ip={ip}, country={country}: "
         f"expected {expected}, got {actual}"
     )
+
+
+def test_live_nginx_json_log_to_ingestion_incident_and_alert(
+    nginx_policy_server, tmp_path, monkeypatch
+):
+    """Nginx decision -> access JSON -> SQLite -> alert, without NPM deployment.
+
+    This validates the actual Nginx HTTP variables and log formatting.
+    GeoIP is deliberately a test-only map, not the native GeoIP2 module.
+    """
+    port, mode, access_log = nginx_policy_server
+    monkeypatch.setattr(database, "DB_FILE", tmp_path / "observation-integration.db")
+    monkeypatch.setattr(database, "DEFAULT_ADMIN_PASSWORD", "integration-only-strong-password")
+    monkeypatch.setattr(observation, "OBSERVE_ALERT_ENABLED", True)
+    monkeypatch.setattr(observation, "OBSERVE_ALERT_THRESHOLD", 3)
+    monkeypatch.setattr(observation, "OBSERVE_ALERT_WINDOW_MINUTES", 5)
+    monkeypatch.setattr(observation, "OBSERVE_ALERT_COOLDOWN_MINUTES", 15)
+    database.init_db()
+
+    # A CIDR scoped to cloud would reject this IP in BLOCK. On Observe,
+    # Nginx forwards the request but logs would_deny=1 and mode=observe.
+    statuses = [
+        request_status(port, "203.0.113.41", HOST_CLOUD, "FR")
+        for _ in range(3)
+    ]
+    observing_cloud = mode != "block"
+    assert statuses == ([204] if observing_cloud else [403]) * 3
+
+    lines = [
+        json.loads(line)
+        for line in access_log.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    records = [row for row in lines if row.get("remote_addr") == "203.0.113.41"]
+    assert len(records) == 3
+    assert all(row["npm_security_would_deny"] == "1" for row in records)
+    assert all(
+        row["npm_security_policy_mode"] == ("observe" if observing_cloud else "block")
+        for row in records
+    )
+    assert all(
+        row["allowed"] == ("yes" if observing_cloud else "no") for row in records
+    )
+
+    # This is the same persisted cursor ingestion used by the app in production.
+    ingested = ingestion.ingest_file_once(access_log)
+    assert ingested == len(lines)
+    with database.get_db() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM observation_incidents").fetchone()[0]
+        alerts = conn.execute("SELECT COUNT(*) FROM observation_alerts").fetchone()[0]
+        if observing_cloud:
+            incident = conn.execute(
+                "SELECT hits, status, last_country FROM observation_incidents"
+            ).fetchone()
+            assert tuple(incident) == (3, "open", "FR")
+        else:
+            assert conn.execute(
+                "SELECT COUNT(*) FROM access_logs WHERE blocked=1"
+            ).fetchone()[0] == 3
+    assert count == (1 if observing_cloud else 0)
+    assert alerts == (1 if observing_cloud else 0)
+
+    # Replaying a checkpoint cannot send duplicate alert notifications.
+    with database.get_db() as conn:
+        conn.execute("UPDATE ingestion_state SET byte_offset=0")
+        conn.commit()
+    assert ingestion.ingest_file_once(access_log) == 0
+    with database.get_db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM observation_alerts").fetchone()[0] == alerts
+
+
+def test_live_geo_country_observe_log_carries_policy_signal(nginx_policy_server):
+    """Country signal is generated inside Nginx, never from application rules."""
+    port, mode, access_log = nginx_policy_server
+    ip = "192.0.2.44"  # deliberately not part of the trusted /29 network
+    expected = 403 if mode == "block" else 204
+    assert request_status(port, ip, HOST_CLOUD, country="CN") == expected
+    lines = [json.loads(line) for line in access_log.read_text().splitlines() if line]
+    latest = [line for line in lines if line.get("remote_addr") == ip][-1]
+    assert latest["npm_security_would_deny"] == "1"
+    assert latest["npm_security_policy_mode"] == ("block" if mode == "block" else "observe")
+    assert latest["country_code"] == "CN"
