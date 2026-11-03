@@ -1,7 +1,7 @@
 """Regression tests for host agent path confinement (no real Docker calls)."""
 import importlib.util
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import subprocess
 import unittest
 
@@ -40,6 +40,16 @@ class AgentPathSafetyTests(unittest.TestCase):
                 with patch.object(agent.subprocess, "run", side_effect=responses):
                     with self.assertRaisesRegex(RuntimeError, "symbolique"):
                         agent.DockerNPM("npm").assert_safe_paths()
+
+    def test_rollback_rechecks_paths_before_restoring_files(self):
+        docker = Mock(container="npm")
+        docker.assert_safe_paths.side_effect = RuntimeError("Chemin NPM symbolique interdit")
+        manifest = {"container": "npm", "existed": {name: True for name in agent.SNIPPETS}}
+        with self.assertRaisesRegex(RuntimeError, "symbolique"):
+            agent.rollback(docker, Path("/unused-backup"), manifest)
+        docker.assert_safe_paths.assert_called_once_with()
+        docker.copy_to.assert_not_called()
+        docker.exec.assert_not_called()
 
     def test_docker_error_is_not_treated_as_absent_symlink(self):
         with patch.object(agent.subprocess, "run", return_value=subprocess.CompletedProcess([], 125)):
