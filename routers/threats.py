@@ -2,7 +2,14 @@ import json
 from fastapi import APIRouter, Depends
 
 from auth_deps import require_admin
-from config import AUTO_BAN_ENABLED, THREAT_AUTO_BLOCK_THRESHOLD, AUTO_BAN_DRY_RUN
+from config import (
+    AUTO_BAN_ENABLED,
+    AUTO_BAN_SCORE,
+    AUTO_BAN_DRY_RUN,
+    THREAT_AUTO_BLOCK_THRESHOLD,
+    BRUTE_FORCE_WINDOW_MIN,
+    BRUTE_FORCE_LOGIN_THRESHOLD,
+)
 from database import get_db
 from services.trust import is_already_blocked, is_trusted_event, validate_ip_or_cidr
 
