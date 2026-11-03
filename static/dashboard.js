@@ -365,6 +365,62 @@ function toast(msg, type='info', dur=3200) {
   setTimeout(()=>{ el.classList.add('out'); setTimeout(()=>el.remove(),250); }, dur);
 }
 
+// Form errors must be visible in the page as well as in transient notifications.
+function formFeedback(id, message, state='info') {
+  const target = document.getElementById(id);
+  if (!target) return;
+  target.textContent = message;
+  target.dataset.state = state;
+}
+function requiredInput(inputId, feedbackId, message) {
+  const input = document.getElementById(inputId);
+  if (input && input.value.trim()) {
+    input.removeAttribute('aria-invalid');
+    return true;
+  }
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    input.focus();
+  }
+  formFeedback(feedbackId, message, 'error');
+  toast(message, 'warning', 5500);
+  return false;
+}
+async function withBusyButton(id, label, task) {
+  const btn = document.getElementById(id);
+  if (!btn || btn.disabled) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.textContent = label;
+  try { await task(); }
+  finally {
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.textContent = original;
+  }
+}
+for (const [field, feedback] of [
+  ['bl-input','bl-form-feedback'],
+  ['trusted-input','trusted-form-feedback'],
+  ['lists-block-input','lists-block-feedback'],
+  ['lists-trusted-input','lists-trusted-feedback'],
+]) {
+  document.getElementById(field)?.addEventListener('input', event => {
+    event.target.removeAttribute('aria-invalid');
+    formFeedback(feedback, '');
+  });
+}
+async function loadSecurityControl() {
+  await Promise.all([
+    loadSecurityControlOverview(),
+    loadSecuritySuspects(),
+    loadObservationIncidents(),
+    loadPolicyModes()
+  ]);
+}
+
+// ═══════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════
 //  MOBILE NAV
 // ═══════════════════════════════════════════════════════════
@@ -378,6 +434,7 @@ function setView(v) {
   if (v==='map') { ensureMapHud(); setTimeout(()=> map&&map.invalidateSize(), 120); }
   if (v==='threats') loadThreats();
   if (v==='lists') loadSecurityLists();
+  if (v==='control') loadSecurityControl();
   if (v==='health') loadNpmHealth();
   if (v==='config') { loadRuntimeConfig(); loadDetailedHealth(); loadPatch53Intel(); loadUsers(); }
 }
@@ -1939,10 +1996,6 @@ async function handleSuspectAction(event) {
 async function loadSecurityLists() {
   if (securityListsLoading) return;
   securityListsLoading = true;
-  void loadSecurityControlOverview();
-  void loadSecuritySuspects();
-  void loadObservationIncidents();
-  void loadPolicyModes();
   const blockedBody = document.getElementById('lists-blocked-body');
   const trustedBody = document.getElementById('lists-trusted-body');
   const historyBody = document.getElementById('lists-history-body');
@@ -2192,8 +2245,24 @@ if (policyModesList) policyModesList.addEventListener('click', event => {
 });
 const securityPreviewForm = document.getElementById('security-preview-form');
 if (securityPreviewForm) securityPreviewForm.addEventListener('submit', simulateSavedSecurityPolicy);
+const controlRefresh = document.getElementById('security-control-refresh');
+if (controlRefresh) controlRefresh.addEventListener('click', () => {
+  void withBusyButton('security-control-refresh', 'Actualisation…', async () => {
+    try {
+      await loadSecurityControl();
+      toast('Centre de contrôle actualisé', 'success');
+    } catch (err) {
+      toast(err.message || 'Actualisation impossible', 'danger');
+    }
+  });
+});
 const listsRefresh = document.getElementById('lists-refresh');
-if (listsRefresh) listsRefresh.addEventListener('click', loadSecurityLists);
+if (listsRefresh) listsRefresh.addEventListener('click', () => {
+  void withBusyButton('lists-refresh', 'Actualisation…', async () => {
+    await loadSecurityLists();
+    toast('Listes et historique actualisés', 'info');
+  });
+});
 const listsBlockAdd = document.getElementById('lists-block-add');
 if (listsBlockAdd) listsBlockAdd.addEventListener('click', addBlockFromLists);
 const listsTrustedAdd = document.getElementById('lists-trusted-add');
@@ -2212,9 +2281,9 @@ if (notifBtn) notifBtn.addEventListener('click', enableBrowserNotifications);
 
 // Periodic refresh (stats + charts every 15s)
 setInterval(()=>{ loadStats(true); loadTimeline(); loadHeatmap(); }, 15000);
-// Keep the Observe console current without polling while the tab is hidden.
+// Keep Observe incident counts fresh only while the Control view is open.
 setInterval(() => {
-  if (document.body.dataset.view === 'lists') void loadObservationIncidents();
+  if (document.body.dataset.view === 'control') void loadObservationIncidents();
 }, 30000);
 
 // ═══════════════════════════════════════════════════════════
