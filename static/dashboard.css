@@ -4871,3 +4871,60 @@ body[data-role="viewer"] .admin-only {
   .security-control-metric { padding: 10px; }
   .security-control-metric > strong { font-size: 22px; }
 }
+
+
+/* Threat investigation: keep decisions clearly separate from Nginx enforcement. */
+.security-suspects {
+  margin: 0 18px 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  border-radius: 14px;
+  color: var(--text);
+}
+.security-suspects-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.security-suspects-head h2 { margin: 6px 0; font-size: 18px; }
+.security-suspects-head p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.security-suspects-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.security-suspects-filters label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.security-suspects-filters select { width: auto; min-width: 90px; }
+.security-suspects-note {
+  margin: 8px 0 14px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--warning);
+  background: var(--surface3);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.security-suspects-note[data-state="applied"] { border-left-color: var(--success); }
+.security-suspects-note[data-state="error"] { border-left-color: var(--danger); }
+.security-suspects-table { min-width: 780px; }
+.security-suspects-table th { white-space: nowrap; }
+.suspect-score { color: var(--warning); font-variant-numeric: tabular-nums; }
+.suspect-country { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; }
+.suspect-actions { min-width: 205px; white-space: nowrap; }
+.suspect-actions button { margin: 2px; }
+.suspect-danger { color: var(--danger); border-color: var(--danger); }
+@media (max-width: 600px) {
+  .security-suspects { margin: 0 8px 12px; padding: 12px; }
+  .security-suspects-filters { gap: 6px; }
+}

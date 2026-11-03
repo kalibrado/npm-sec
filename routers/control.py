@@ -3,6 +3,8 @@
 The endpoint reports what NPM actually logged separately from security
 rules that are only generated or pending application to Nginx.
 """
+import ipaddress
+
 from fastapi import APIRouter, Depends, Query
 
 from auth_deps import require_admin
@@ -13,6 +15,7 @@ from config import (
 )
 from database import get_db
 from services.deployment import get_policy_deployment_status
+from services.trust import is_internal_ip
 
 router = APIRouter(tags=["security-control"], dependencies=[Depends(require_admin)])
 
@@ -80,4 +83,82 @@ def security_control_overview(
         "detections": dict(incidents),
         "auto_ban_mode": auto_ban_mode,
         "recent_actions": latest_actions,
+    }
+
+
+def _matching_network_rule(ip: ipaddress.IPv4Address | ipaddress.IPv6Address, rows):
+    """Return the most specific matching CIDR or exact IP rule."""
+    matches = []
+    for row in rows:
+        try:
+            network = ipaddress.ip_network(row["value"], strict=False)
+        except ValueError:
+            continue
+        if ip in network:
+            matches.append((network.prefixlen, dict(row)))
+    return max(matches, default=(None, None), key=lambda item: item[0])[1]
+
+
+@router.get("/security-control/suspects")
+def security_control_suspects(
+    hours: int = Query(default=24, ge=1, le=168),
+    limit: int = Query(default=20, ge=1, le=100),
+    min_score: int = Query(default=25, ge=0, le=100),
+):
+    """Rank suspicious IPs by observed threat signals, without changing policy.
+
+    The returned block state describes rule storage, not actual Nginx
+    enforcement. Only explicit IP/CIDR trust is used as a network exemption;
+    a spoofable User-Agent is never treated as an IP trust grant.
+    """
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT te.ip, COUNT(*) AS signals, MAX(te.score) AS max_score,
+                      MAX(te.created_at) AS last_seen,
+                      SUM(CASE WHEN te.threat_type='brute_force' THEN 1 ELSE 0 END) AS brute_force,
+                      SUM(CASE WHEN te.threat_type='scanner' THEN 1 ELSE 0 END) AS scans,
+                      MAX(al.host) AS host,
+                      MAX(al.country_code) AS country_code
+               FROM threat_events te
+               LEFT JOIN access_logs al ON al.id=te.access_log_id
+               WHERE datetime(te.created_at) >= datetime('now', ?)
+                 AND te.score >= ? AND te.ip IS NOT NULL AND te.ip != ''
+               GROUP BY te.ip
+               ORDER BY max_score DESC, signals DESC, last_seen DESC
+               LIMIT ?""",
+            [f"-{hours} hours", min_score, limit],
+        ).fetchall()
+        blocked_rules = conn.execute(
+            """SELECT id, type, value FROM blocklist
+               WHERE type IN ('ip','cidr')
+                 AND (expires_at IS NULL OR expires_at > datetime('now'))"""
+        ).fetchall()
+        trusted_rules = conn.execute(
+            """SELECT id, type, value FROM trusted_entries
+               WHERE type IN ('ip','cidr')"""
+        ).fetchall()
+
+    results = []
+    for row in rows:
+        try:
+            ip = ipaddress.ip_address(row["ip"])
+        except ValueError:
+            continue
+        blocking = _matching_network_rule(ip, blocked_rules)
+        trusted = _matching_network_rule(ip, trusted_rules)
+        internal = is_internal_ip(str(ip))
+        results.append({
+            **dict(row),
+            "ip": str(ip),
+            "internal": internal,
+            "trusted": internal or trusted is not None,
+            "trust_source": "internal_network" if internal else (trusted["type"] if trusted else None),
+            "block_rule": blocking,
+            "direct_block_id": blocking["id"] if blocking and blocking["type"] == "ip" else None,
+        })
+    return {
+        "window_hours": hours,
+        "min_score": min_score,
+        "policy_state": get_policy_deployment_status()["state"],
+        "items": results,
     }

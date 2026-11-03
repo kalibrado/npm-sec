@@ -266,6 +266,39 @@
     <a href="https://github.com/kalibrado/npm-sec/blob/dev/docs/NPM_POLICY_ENFORCEMENT.md" target="_blank" rel="noopener noreferrer">Documentation NPM ↗</a>
   </div>
 </section>
+<section class="security-suspects" aria-labelledby="security-suspects-title">
+  <div class="security-suspects-head">
+    <div>
+      <div class="security-control-eyebrow">THREAT INTELLIGENCE / IP</div>
+      <h2 id="security-suspects-title">IP suspectes à examiner</h2>
+      <p>Signaux détectés dans les logs HTTP. Un score n'est pas une preuve d'attaque.</p>
+    </div>
+    <div class="security-suspects-filters">
+      <label for="suspects-hours">Période</label>
+      <select class="search" id="suspects-hours">
+        <option value="1">1 heure</option>
+        <option value="24" selected>24 heures</option>
+        <option value="168">7 jours</option>
+      </select>
+      <label for="suspects-score">Score min.</label>
+      <select class="search" id="suspects-score">
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="75">75</option>
+      </select>
+      <button class="page-btn" id="suspects-refresh" type="button">Actualiser</button>
+    </div>
+  </div>
+  <div class="security-suspects-note" id="suspects-policy-note" role="status">Chargement des menaces…</div>
+  <div class="list-table-wrap">
+    <table class="compact-table security-suspects-table">
+      <thead>
+      <tr><th>IP</th><th>Score max.</th><th>Signaux</th><th>Types</th><th>Domaine / pays</th><th>Règle enregistrée</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="suspects-body"><tr><td colspan="7">Chargement…</td></tr></tbody>
+    </table>
+  </div>
+</section>
 <div class="lists-content">
 <section class="list-card" data-list-section="blocked">
 <div class="list-card-head">
