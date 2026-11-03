@@ -4,6 +4,7 @@ from services.auto_ban import record_ban_event
 from services.export import (
     get_blocklist_items,
     get_trusted_items,
+    get_policy_modes,
     write_blocklist_exports,
 )
 
@@ -24,6 +25,6 @@ def expire_block_rules() -> int:
             )
         # Generate from the updated transaction. Failure rolls back the rows,
         # allowing the next scheduler tick to retry rather than leave stale state.
-        write_blocklist_exports(get_blocklist_items(conn), get_trusted_items(conn))
+        write_blocklist_exports(get_blocklist_items(conn), get_trusted_items(conn), get_policy_modes(conn))
         conn.commit()
         return len(expired)
