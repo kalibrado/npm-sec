@@ -2470,7 +2470,78 @@ function healthKV(label, value, cls='') {
 }
 function boolStatus(v) { return v ? ['OK','health-ok'] : ['KO','health-bad']; }
 
+async function loadIngestionDiagnostics() {
+  const badge = document.getElementById('ingestion-health-status');
+  const advice = document.getElementById('ingestion-health-advice');
+  const metrics = document.getElementById('ingestion-health-metrics');
+  const note = document.getElementById('ingestion-health-note');
+  if (!badge || !advice || !metrics || !note) return;
+  badge.textContent = 'Vérification…';
+  badge.dataset.state = 'loading';
+  advice.textContent = 'Lecture du fichier de logs et du curseur de collecte…';
+
+  try {
+    const d = await fetchJsonSafe('/health/ingestion');
+    const file = d.file || {};
+    const cursor = d.cursor || {};
+    const runtime = d.runtime || {};
+    const stored = d.stored || {};
+    const counts = value => Number(value || 0).toLocaleString('fr-FR');
+    const size = value => value === null || value === undefined
+      ? '—' : `${counts(value)} octets`;
+    const duration = value => value === null || value === undefined
+      ? 'Jamais observé' : `${counts(Math.round(value))} s`;
+    badge.textContent = ({
+      ok: 'Collecte à jour',
+      warning: 'À vérifier',
+      error: 'Erreur de collecte'
+    })[d.status] || 'Indéterminé';
+    badge.dataset.state = d.status || 'warning';
+    advice.dataset.state = d.status || 'warning';
+    advice.textContent = d.advice || 'Diagnostic indisponible.';
+
+    metrics.innerHTML = [
+      healthKV('Fichier LOG_FILE', d.log_file || 'Non défini'),
+      healthKV('Fichier source', file.exists ? (file.readable ? 'Présent · lisible' : 'Présent · illisible') : 'Absent',
+        file.exists && file.readable ? 'health-ok' : 'health-bad'),
+      healthKV('Dernière écriture Nginx', duration(file.seconds_since_write)),
+      healthKV('Taille du fichier', size(file.size_bytes)),
+      healthKV('Dernier cycle de collecte', duration(runtime.seconds_since_poll),
+        runtime.seconds_since_poll !== null && runtime.seconds_since_poll <= 30 ? 'health-ok' : 'health-warn'),
+      healthKV('Curseur SQLite', cursor.present ? size(cursor.offset_bytes) : 'Non initialisé',
+        cursor.present ? 'health-ok' : 'health-warn'),
+      healthKV('Octets en attente', size(cursor.backlog_bytes),
+        cursor.backlog_bytes > 0 ? 'health-warn' : 'health-ok'),
+      healthKV('Lignes lues depuis le démarrage', counts(runtime.lines_read)),
+      healthKV('Lignes ajoutées', counts(runtime.lines_inserted), 'health-ok'),
+      healthKV('Lignes JSON rejetées', counts(runtime.lines_invalid),
+        runtime.lines_invalid ? 'health-warn' : 'health-ok'),
+      healthKV('Relectures évitées', counts(runtime.lines_duplicate)),
+      healthKV('Logs en base', counts(stored.total_logs)),
+      healthKV('Dernière requête enregistrée', stored.latest_log_timestamp
+        ? fmtDateTime(stored.latest_log_timestamp) : 'Aucune'),
+    ].join('');
+
+    const sampled = Number(stored.recent_sample_size || 0);
+    const instrumented = Number(stored.instrumented_sample || 0);
+    const modeMessage = sampled && !instrumented
+      ? `Les ${sampled} dernières entrées examinées n'ont pas les variables Observe. Vérifier les champs JSON émis par Nginx.`
+      : `${instrumented} requête(s) instrumentée(s) parmi ${sampled} dernières entrées.`;
+    const errorMessage = runtime.last_error_type
+      ? ` · Dernière erreur collecteur : ${runtime.last_error_type}.` : '';
+    note.textContent = `${modeMessage} · Lignes rejetées et compteurs runtime depuis le démarrage du dashboard seulement.${errorMessage} Aucune donnée de requête brute n'est affichée ici.`;
+  } catch (error) {
+    badge.dataset.state = 'error';
+    badge.textContent = 'Diagnostic indisponible';
+    advice.dataset.state = 'error';
+    advice.textContent = error.message || 'Impossible de récupérer le diagnostic de collecte.';
+    metrics.textContent = '';
+    note.textContent = '';
+  }
+}
+
 async function loadNpmHealth() {
+  void loadIngestionDiagnostics();
   const summary = document.getElementById('health-summary');
   if (!summary) return;
   try {
@@ -2559,6 +2630,14 @@ async function simulateAutoban() {
     body.innerHTML = '<tr><td colspan="5">Erreur simulation</td></tr>';
   }
 }
+
+const ingestionHealthRefresh = document.getElementById('ingestion-health-refresh');
+if (ingestionHealthRefresh) ingestionHealthRefresh.addEventListener('click', () => {
+  void withBusyButton('ingestion-health-refresh', 'Vérification…', loadIngestionDiagnostics);
+});
+setInterval(() => {
+  if (document.body.dataset.view === 'health') void loadIngestionDiagnostics();
+}, 30000);
 
 const healthRefresh = document.getElementById('health-refresh');
 if (healthRefresh) healthRefresh.addEventListener('click', loadNpmHealth);
