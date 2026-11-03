@@ -84,6 +84,23 @@ BASE_URL=http://localhost:8000 ADMIN_TOKEN=<token> ./scripts/smoke-test.sh
 
 Le `ADMIN_TOKEN` reste accepté pour les scripts/API, même si l'UI utilise les sessions web.
 
+## Centre de contrôle de sécurité
+
+La page **Listes de sécurité** présente un aperçu vérifiable des dernières
+24 heures via l'API authentifiée `GET /security-control/overview?hours=24`.
+Le périmètre peut être adapté de 1 à 168 heures avec le paramètre `hours`.
+
+- Règles IP/CIDR/pays **enregistrées** et non expirées, séparées des exceptions.
+- Requêtes réellement déclarées `blocked` dans les logs NPM.
+- Événements de menace classifiés `brute_force` et `scanner`.
+- Mode du bannissement automatique : désactivé / simulation / actif.
+- État de politique `not_configured`, `pending`, `applied` fondé sur
+  la **dernière** validation et recharge de l'outil d'application NPM.
+
+Une politique `applied` ne signifie **pas** une surveillance continue de
+l'instance NPM si quelqu'un modifie le proxy en dehors du script. De même,
+une règle enregistrée en base n'est pas automatiquement un blocage effectif.
+
 ## Ingestion continue des logs (branche dev)
 
 La collecte ne dépend plus d'un navigateur ouvert : un ingesteur serveur unique lit le fichier NPM, mémorise sa position en SQLite et tolère les rotations/troncatures observées. Le SSE (`/events`) est désormais un flux **lecture seule** avec reprise par `since_id`. Les insertions portent une clé d'origine unique pour éviter les doublons après crash.
