@@ -240,7 +240,11 @@ def main():
     if args.confirm != CONFIRM:
         parser.error(f"Opération refusée sans --confirm {CONFIRM}")
     if args.apply:
-        apply(args.container, args.backup_root)
+        raise RuntimeError(
+            "Application bloquée : ce prototype statique ne reflète pas les "
+            "révisions de la web UI. L'agent local de validation/déploiement "
+            "sera livré séparément. Aucun fichier NPM modifié."
+        )
     else:
         rollback(args.container, args.rollback.resolve())
     return 0
