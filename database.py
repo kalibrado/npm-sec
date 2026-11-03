@@ -70,6 +70,12 @@ def init_db():
             )
         """
         )
+        # Existing installations receive a nullable expiration column.
+        block_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(blocklist)")
+        }
+        if "expires_at" not in block_columns:
+            conn.execute("ALTER TABLE blocklist ADD COLUMN expires_at TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS threat_events (
