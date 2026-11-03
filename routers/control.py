@@ -16,7 +16,7 @@ from config import (
 from database import get_db
 from services.deployment import get_policy_deployment_status
 from services.policy_preview import evaluate_saved_policy
-from schemas import PolicyModeUpdate
+from schemas import ObservationIncidentStatusUpdate, PolicyModeUpdate
 from services.export import (
     get_blocklist_items, get_trusted_items, get_policy_modes,
     write_blocklist_exports,
@@ -243,3 +243,101 @@ def reset_policy_mode(host: str = Query(default="", max_length=253)):
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Unable to reset policy mode") from exc
     return {"host": scope, "mode": "inherited", "pending_apply": True}
+
+
+@router.get("/security-control/observations")
+def observation_incident_console(
+    hours: int = Query(default=24, ge=1, le=168),
+    limit: int = Query(default=50, ge=1, le=100),
+    status: str = Query(default="all"),
+):
+    """Observed Nginx decisions, not inferred from HTTP status or saved rules."""
+    if status not in {"all", "open", "acknowledged", "resolved"}:
+        raise HTTPException(status_code=422, detail="Invalid incident status")
+
+    window = f"-{hours} hours"
+    with get_db() as conn:
+        summary = conn.execute(
+            """SELECT
+                   COUNT(*) AS instrumented_requests,
+                   COALESCE(SUM(CASE WHEN policy_mode='observe' AND would_deny=1
+                            THEN 1 ELSE 0 END), 0) AS would_deny_requests,
+                   COALESCE(SUM(CASE WHEN policy_mode='block' AND would_deny=1
+                            THEN 1 ELSE 0 END), 0) AS would_deny_block_mode
+               FROM access_logs
+               WHERE policy_mode IN ('observe','block')
+                 AND would_deny IN (0,1)
+                 AND datetime(timestamp) >= datetime('now', ?)""",
+            (window,),
+        ).fetchone()
+        alert_count = conn.execute(
+            """SELECT COUNT(*) FROM observation_alerts
+               WHERE created_at >= datetime('now', ?)""",
+            (window,),
+        ).fetchone()[0]
+        where = "AND status=?" if status != "all" else ""
+        args = [window]
+        if status != "all":
+            args.append(status)
+        args.append(limit)
+        items = [
+            dict(row) for row in conn.execute(
+                f"""SELECT id, host, ip, status, first_seen, last_seen,
+                           hits, last_uri, last_country, last_alert_at
+                    FROM observation_incidents
+                    WHERE last_seen >= datetime('now', ?) {where}
+                    ORDER BY last_seen DESC, id DESC LIMIT ?""",
+                args,
+            ).fetchall()
+        ]
+    return {
+        "window_hours": hours,
+        "telemetry_available": summary["instrumented_requests"] > 0,
+        "telemetry": dict(summary),
+        "alert_count": alert_count,
+        "items": items,
+        "source": "nginx_observation_fields",
+        "warning": (
+            "Seuls les logs Nginx contenant npm_security_policy_mode et "
+            "npm_security_would_deny alimentent les incidents. "
+            "Aucune décision n'est inférée depuis les règles enregistrées."
+        ),
+    }
+
+
+@router.get("/security-control/observations/alerts")
+def observation_alert_history(
+    hours: int = Query(default=24, ge=1, le=168),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    with get_db() as conn:
+        alerts = conn.execute(
+            """SELECT a.id, a.incident_id, a.created_at, a.recent_hits,
+                      i.host, i.ip, i.status
+               FROM observation_alerts a
+               JOIN observation_incidents i ON i.id=a.incident_id
+               WHERE a.created_at >= datetime('now', ?)
+               ORDER BY a.id DESC LIMIT ?""",
+            (f"-{hours} hours", limit),
+        ).fetchall()
+    return [dict(row) for row in alerts]
+
+
+@router.post("/security-control/observations/{incident_id}/status")
+def update_observation_incident(
+    incident_id: int,
+    payload: ObservationIncidentStatusUpdate,
+):
+    with get_db() as conn:
+        incident = conn.execute(
+            "SELECT id FROM observation_incidents WHERE id=?",
+            (incident_id,),
+        ).fetchone()
+        if incident is None:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        conn.execute(
+            "UPDATE observation_incidents SET status=? WHERE id=?",
+            (payload.status, incident_id),
+        )
+        conn.commit()
+    return {"id": incident_id, "status": payload.status}

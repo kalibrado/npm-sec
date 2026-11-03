@@ -143,12 +143,15 @@ explicite a priorité sur ce mode global. Réinitialiser son override lui
 rend le mode global.
 
 L'export expose `$npm_security_would_deny` (valeur `0` ou `1`) et
-`$npm_security_policy_mode` (`block` ou `observe`). Pour suivre en
-exploitation les requêtes **qui auraient été refusées** en Observation,
-ajouter ces variables au format d'access log NPM, puis les analyser
-avec le pipeline de collecte. La prise en charge automatique de ces
-signaux n'est pas encore disponible. Ce mode **ne génère pas d'alerte**
-à lui seul.
+`$npm_security_policy_mode` (`block` ou `observe`). La console
+d'incidents sait maintenant ingérer ces champs depuis le log JSON,
+afficher les observations et créer des alertes anti-spam.
+**Attention : ces alertes ne fonctionnent que lorsque les deux
+variables sont effectivement ajoutées au log NPM actif.**
+Le mode `observe` ne constitue pas, à lui seul, un mécanisme d'alerte.
+
+Consulter le [guide d'instrumentation des logs NPM](NPM_OBSERVATION_ALERTS.md)
+avant d'activer la console en recette.
 
 **Important :** passer un domaine en Observation retire les protections
 HTTP 403 générées par NPM Security pour ce domaine, *une fois le nouvel

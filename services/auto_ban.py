@@ -15,6 +15,10 @@ def record_ban_event(conn: sqlite3.Connection, target: str, entry_type: str, act
 
 
 def maybe_auto_ban(event: dict, conn: sqlite3.Connection) -> bool:
+    # Observe is intentionally non-enforcing, even if the global
+    # automatic ban feature is configured elsewhere.
+    if event.get("policy_mode") == "observe":
+        return False
     legacy_enabled = THREAT_AUTO_BLOCK_THRESHOLD > 0
     enabled = AUTO_BAN_ENABLED or legacy_enabled
     threshold = THREAT_AUTO_BLOCK_THRESHOLD if legacy_enabled and not AUTO_BAN_ENABLED else AUTO_BAN_SCORE

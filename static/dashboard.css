@@ -5027,3 +5027,80 @@ body[data-role="viewer"] .admin-only {
   .security-policy-modes { margin: 0 8px 12px; padding: 12px; }
   .security-mode-item { flex-wrap: wrap; }
 }
+
+
+/* Observation incidents are based on verified Nginx log fields, not saved rules. */
+.security-observations {
+  margin: 0 18px 16px;
+  padding: 18px;
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  background: var(--surface2);
+  color: var(--text);
+}
+.security-observations h2 { margin: 6px 0; font-size: 18px; }
+.security-observations p { color: var(--muted); margin: 0 0 12px; font-size: 12px; }
+.observation-telemetry-note {
+  margin: 8px 0 14px;
+  background: var(--surface3);
+  border-left: 3px solid var(--border2);
+  padding: 11px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.observation-telemetry-note[data-state="available"] { border-left-color: var(--success); }
+.observation-telemetry-note[data-state="missing"] { border-left-color: var(--warning); }
+.observation-telemetry-note[data-state="error"] { border-left-color: var(--danger); }
+.observation-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.observation-metrics > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.observation-metrics strong {
+  font-size: 24px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.observation-metrics span { color: var(--muted); font-size: 11px; }
+.observation-incidents-table { min-width: 700px; }
+.observation-incidents-table td { max-width: 270px; overflow-wrap: anywhere; }
+.observation-actions { min-width: 170px; white-space: nowrap; }
+.observation-actions button { margin: 2px; }
+.observation-state {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: 20px;
+  padding: 5px 9px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+}
+.observation-state[data-state="open"] { color: var(--danger); border-color: var(--danger); }
+.observation-state[data-state="acknowledged"] { color: var(--warning); border-color: var(--warning); }
+.observation-state[data-state="resolved"] { color: var(--success); border-color: var(--success); }
+.observation-alert-history {
+  margin-top: 15px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.observation-alert-history strong { color: var(--text); font-size: 12px; }
+.observation-alert-history ul { margin: 8px 0 0; padding-left: 20px; }
+.observation-alert-history li { margin: 5px 0; }
+@media (max-width: 600px) {
+  .security-observations { margin: 0 8px 12px; padding: 12px; }
+  .observation-metrics { gap: 7px; }
+  .observation-metrics > div { padding: 10px; }
+  .observation-metrics strong { font-size: 20px; }
+}

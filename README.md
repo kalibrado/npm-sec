@@ -156,6 +156,25 @@ SESSION_COOKIE_SECURE=true
 
 Voir aussi `docs/NPM_REVERSE_PROXY.md`.
 
+## Console d'incidents d'observation
+
+Le cockpit affiche les requêtes **qui auraient été bloquées**, à partir
+des champs Nginx `npm_security_policy_mode` et
+`npm_security_would_deny` explicitement présents dans les logs JSON.
+Il ne reconstruit pas ces événements depuis les règles enregistrées :
+en l'absence de télémétrie réellement instrumentée, un avertissement
+le signale.
+
+Chaque paire domaine/IP produit un incident, avec acquittement,
+résolution et réouverture automatique en cas de nouvel événement.
+Des alertes persistantes se déclenchent après cinq événements en
+cinq minutes par défaut, avec quinze minutes de cooldown. Discord est
+disponible en option et désactivé par défaut. Une requête en mode
+Observation **ne déclenche jamais d'auto-ban**.
+
+Configuration Nginx, API, règles d'alerte et limites :
+[Guide des incidents d'observation](docs/NPM_OBSERVATION_ALERTS.md).
+
 ## Modes de protection : Observation et Blocage
 
 Le centre de contrôle expose désormais le mode **Blocage** (historique et
