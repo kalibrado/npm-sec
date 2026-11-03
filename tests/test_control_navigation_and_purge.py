@@ -220,3 +220,56 @@ def test_service_worker_never_caches_sensitive_api_and_refreshes_ui_first():
     assert "/db/" not in shell
     assert "/blocklist" not in shell
     assert "/auth/" not in shell
+
+
+def test_only_admin_can_purge_even_with_confirmation(client):
+    from security import pbkdf2_password
+
+    with database.get_db() as conn:
+        conn.execute(
+            """INSERT INTO users(username,password_hash,role)
+               VALUES ('viewer', ?, 'viewer')""",
+            (pbkdf2_password("viewer-secure-password"),),
+        )
+        conn.commit()
+    response = client.post(
+        "/auth/login", json={
+            "username": "viewer", "password": "viewer-secure-password"
+        },
+    )
+    assert response.status_code == 200
+    assert purge(client).status_code == 403
+
+
+def test_purge_keeps_real_file_cursor_and_collects_only_new_lines(client):
+    import json
+    from datetime import datetime, timezone
+
+    path = ingestion.LOG_FILE
+    def line(ip):
+        return json.dumps({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "remote_addr": ip,
+            "host": "cloud.kaliorbis.fr",
+            "uri": "/",
+            "status": 200,
+            "allowed": "yes",
+        }) + "\\n"
+
+    path.write_text(line("203.0.113.81"), encoding="utf-8")
+    assert ingestion.ingest_file_once() == 1
+    assert count("access_logs") == 1
+    authenticate(client)
+    result = purge(client)
+    assert result.status_code == 200
+    assert count("access_logs") == 0
+    assert ingestion.ingest_file_once() == 0
+
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(line("203.0.113.82"))
+    assert ingestion.ingest_file_once() == 1
+    with database.get_db() as conn:
+        items = conn.execute(
+            "SELECT ip FROM access_logs ORDER BY id"
+        ).fetchall()
+        assert [row["ip"] for row in items] == ["203.0.113.82"]
