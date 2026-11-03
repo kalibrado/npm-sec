@@ -28,4 +28,4 @@ jobs:
           LOG_FILE: /tmp/npm-sec-ci.log
         run: |
           python -m compileall -q .
-          pytest -q
+          python -m pytest -q
