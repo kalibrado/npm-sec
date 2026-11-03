@@ -365,6 +365,67 @@ function toast(msg, type='info', dur=3200) {
   setTimeout(()=>{ el.classList.add('out'); setTimeout(()=>el.remove(),250); }, dur);
 }
 
+// Form errors must be visible in the page as well as in transient notifications.
+function apiErrorMessage(data, fallback='Action impossible') {
+  const detail = data?.detail || data?.error;
+  if (Array.isArray(detail)) return detail.map(item => item.msg || String(item)).join(' ; ');
+  return typeof detail === 'string' ? detail : fallback;
+}
+function formFeedback(id, message, state='info') {
+  const target = document.getElementById(id);
+  if (!target) return;
+  target.textContent = message;
+  target.dataset.state = state;
+}
+function requiredInput(inputId, feedbackId, message) {
+  const input = document.getElementById(inputId);
+  if (input && input.value.trim()) {
+    input.removeAttribute('aria-invalid');
+    return true;
+  }
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    input.focus();
+  }
+  formFeedback(feedbackId, message, 'error');
+  toast(message, 'warning', 5500);
+  return false;
+}
+async function withBusyButton(id, label, task) {
+  const btn = document.getElementById(id);
+  if (!btn || btn.disabled) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.textContent = label;
+  try { await task(); }
+  finally {
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.textContent = original;
+  }
+}
+for (const [field, feedback] of [
+  ['bl-input','bl-form-feedback'],
+  ['trusted-input','trusted-form-feedback'],
+  ['lists-block-input','lists-block-feedback'],
+  ['lists-trusted-input','lists-trusted-feedback'],
+]) {
+  document.getElementById(field)?.addEventListener('input', event => {
+    event.target.removeAttribute('aria-invalid');
+    formFeedback(feedback, '');
+  });
+}
+async function loadSecurityControl() {
+  await Promise.all([
+    loadSecurityControlOverview(),
+    loadSecuritySuspects(),
+    loadObservationIncidents(),
+    loadPolicyModes()
+  ]);
+}
+
+// ═══════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════
 //  MOBILE NAV
 // ═══════════════════════════════════════════════════════════
@@ -378,6 +439,7 @@ function setView(v) {
   if (v==='map') { ensureMapHud(); setTimeout(()=> map&&map.invalidateSize(), 120); }
   if (v==='threats') loadThreats();
   if (v==='lists') loadSecurityLists();
+  if (v==='control') loadSecurityControl();
   if (v==='health') loadNpmHealth();
   if (v==='config') { loadRuntimeConfig(); loadDetailedHealth(); loadPatch53Intel(); loadUsers(); }
 }
@@ -1137,36 +1199,51 @@ async function loadBlocklist() {
 }
 
 async function addBlock() {
-  const value = document.getElementById('bl-input').value.trim();
-  const reason = document.getElementById('bl-reason').value.trim();
-  const host = document.getElementById('bl-host')?.value.trim() || null;
-  if (!value || !requireAdminClient()) return;
-  const type = value.includes('/') ? 'cidr' : /^[A-Za-z]{2}$/.test(value) ? 'country' : 'ip';
-  try {
-    const r = await adminFetch('/blocklist', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type, value, reason, host})
-    });
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Ajout de règle refusé');
-    document.getElementById('bl-input').value = '';
-    document.getElementById('bl-reason').value = '';
-    document.getElementById('bl-host').value = '';
-    toast(`${value} enregistré pour ${host || 'tous les domaines'}, application Nginx en attente`, 'success');
-    loadBlocklist();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch (e) {
-    toast(e.message || 'Ajout refusé', 'danger');
-  }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('bl-input', 'bl-form-feedback', 'Renseigne une IP, un CIDR ou un code pays.')) return;
+  await withBusyButton('bl-add', 'Ajout…', async () => {
+    const value = document.getElementById('bl-input').value.trim();
+    const reason = document.getElementById('bl-reason').value.trim();
+    const host = document.getElementById('bl-host')?.value.trim() || null;
+    const type = value.includes('/') ? 'cidr' : /^[A-Za-z]{2}$/.test(value) ? 'country' : 'ip';
+    formFeedback('bl-form-feedback', 'Enregistrement de la règle…', 'loading');
+    try {
+      const r = await adminFetch('/blocklist', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type, value, reason, host})
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Ajout de règle refusé'));
+      document.getElementById('bl-input').value = '';
+      document.getElementById('bl-reason').value = '';
+      document.getElementById('bl-host').value = '';
+      const message = `${value} enregistré pour ${host || 'tous les domaines'}. Application Nginx en attente.`;
+      formFeedback('bl-form-feedback', message, 'success');
+      toast(message, 'success');
+      await loadBlocklist();
+      if (document.body.dataset.view === 'lists') await loadSecurityLists();
+      if (document.body.dataset.view === 'control') void loadSecurityControl();
+    } catch (e) {
+      formFeedback('bl-form-feedback', e.message || 'Ajout refusé', 'error');
+      toast(e.message || 'Ajout refusé', 'danger');
+    }
+  });
 }
+
 async function removeBlock(id) {
+  if (!requireAdminClient()) return;
   try {
-    await adminFetch(`/blocklist/${encodeURIComponent(id)}`,{method:'DELETE'});
-    toast('Entrée supprimée','info');
-    loadBlocklist();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch { toast('Erreur','danger'); }
+    const r = await adminFetch(`/blocklist/${encodeURIComponent(id)}`, {method:'DELETE'});
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(apiErrorMessage(data, 'Suppression refusée'));
+    toast('Règle supprimée. Application Nginx en attente.', 'success');
+    await loadBlocklist();
+    if (document.body.dataset.view === 'lists') await loadSecurityLists();
+    if (document.body.dataset.view === 'control') void loadSecurityControl();
+  } catch (e) {
+    toast(e.message || 'Suppression impossible', 'danger');
+  }
 }
 
 document.getElementById('bl-add').addEventListener('click', addBlock);
@@ -1419,37 +1496,137 @@ async function loadBanEvents() {
   }
 }
 
+function initLogPurge() {
+  const dialog = document.getElementById('logs-purge-dialog');
+  const opener = document.getElementById('logs-purge-open');
+  const input = document.getElementById('logs-purge-confirm');
+  const submit = document.getElementById('logs-purge-submit');
+  const cancel = document.getElementById('logs-purge-cancel');
+  const form = document.getElementById('logs-purge-form');
+  const status = document.getElementById('logs-purge-dialog-status');
+  if (!dialog || !opener || !input || !submit || !cancel || !form || !status) return;
+
+  opener.addEventListener('click', () => {
+    if (!requireAdminClient()) return;
+    if (typeof dialog.showModal !== 'function') {
+      toast('La confirmation de purge n’est pas prise en charge par ce navigateur.', 'danger');
+      return;
+    }
+    input.value = '';
+    submit.disabled = true;
+    status.textContent = '';
+    status.dataset.state = '';
+    dialog.showModal();
+    input.focus();
+  });
+
+  input.addEventListener('input', () => {
+    submit.disabled = input.value !== 'PURGER';
+    if (status.dataset.state === 'error') status.textContent = '';
+  });
+  cancel.addEventListener('click', () => {
+    if (submit.getAttribute('aria-busy') === 'true') return;
+    dialog.close();
+  });
+  dialog.addEventListener('cancel', event => {
+    if (submit.getAttribute('aria-busy') === 'true') event.preventDefault();
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!requireAdminClient()) return;
+    if (input.value !== 'PURGER') {
+      status.dataset.state = 'error';
+      status.textContent = 'Saisis exactement PURGER pour confirmer la suppression.';
+      toast(status.textContent, 'warning');
+      input.focus();
+      return;
+    }
+    await withBusyButton('logs-purge-submit', 'Suppression…', async () => {
+      status.dataset.state = 'loading';
+      status.textContent = 'Purge des logs et événements dérivés en cours…';
+      try {
+        const r = await adminFetch('/db/purge-logs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Purge-Confirmation': 'PURGER'
+          },
+          body: JSON.stringify({confirmation: 'PURGER'})
+        });
+        const data = await r.json();
+        if (!r.ok || data.status !== 'ok') throw new Error(apiErrorMessage(data, 'Purge refusée'));
+        const count = Number(data.deleted?.access_logs || 0);
+        const message = `Purge terminée : ${count.toLocaleString('fr-FR')} logs supprimés. Règles et collecteur préservés.`;
+        const feedback = document.getElementById('log-purge-feedback');
+        if (feedback) {
+          feedback.textContent = message;
+          feedback.dataset.state = 'success';
+        }
+        dialog.close();
+        toast(message, 'success', 6500);
+        void loadStats(true);
+        void loadPage('first');
+        void loadTimeline();
+        void loadHeatmap();
+        if (document.body.dataset.view === 'control') void loadSecurityControl();
+      } catch (error) {
+        status.dataset.state = 'error';
+        status.textContent = error.message || 'Purge impossible : aucun changement confirmé.';
+        toast(status.textContent, 'danger', 6000);
+      }
+    });
+  });
+}
+
+initLogPurge();
+
 function openExport(kind) {
+  if (!requireAdminClient()) return;
   const url = kind === 'nginx' ? '/blocklist/export/nginx' : '/blocklist/export/json';
+  toast(`Ouverture de l'export ${kind === 'nginx' ? 'Nginx' : 'JSON'} dans un nouvel onglet…`, 'info');
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function applyBlocklistExport(reload = false) {
-  const status = document.getElementById('bl-export-status');
-  if (status) status.textContent = reload ? 'Écriture + reload demandé…' : 'Écriture des fichiers…';
-  try {
-    const r = await adminFetch(`/blocklist/export/apply?reload=${reload ? 'true' : 'false'}`, {method:'POST'});
-    const d = await r.json();
-    if (!r.ok || d.error) {
-      const msg = d.detail || d.error || 'Erreur export';
-      if (status) status.textContent = msg;
-      toast(msg, 'danger');
-      return;
-    }
-    const exportInfo = d.export || {};
-    const reloadInfo = d.reload || {};
-    const msg = `Export OK · ${exportInfo.count ?? 0} entrées · ${exportInfo.nginx_path || 'nginx conf'}`;
-    if (status) {
-      status.innerHTML = `${esc(msg)}<br><span>${esc(reloadInfo.message || (reloadInfo.executed ? `reload code ${reloadInfo.returncode}` : 'reload non exécuté'))}</span>`;
-    }
-    toast(reload ? 'Export appliqué, reload traité' : 'Fichiers exportés', reloadInfo.ok === false ? 'warning' : 'success');
-    loadBanEvents();
-  } catch (e) {
-    if (status) status.textContent = "Erreur réseau pendant l'export";
-    toast("Erreur réseau pendant l'export", 'danger');
+  if (!requireAdminClient()) return;
+  if (reload && !confirm('Demander un rechargement Nginx ? Le dashboard ne peut recharger NPM que si le mécanisme d’administration est explicitement activé.')) {
+    toast('Rechargement annulé : aucun fichier modifié.', 'info');
+    return;
   }
+  const status = document.getElementById('bl-export-status');
+  const buttonId = reload ? 'bl-apply-reload' : 'bl-apply-export';
+  await withBusyButton(buttonId, 'Écriture…', async () => {
+    if (status) {
+      status.dataset.state = 'loading';
+      status.textContent = 'Génération des fichiers en cours…';
+    }
+    try {
+      const r = await adminFetch(`/blocklist/export/apply?reload=${reload ? 'true' : 'false'}`, {method:'POST'});
+      const d = await r.json();
+      if (!r.ok || d.error || d.status !== 'ok') throw new Error(apiErrorMessage(d, 'Erreur export'));
+      const info = d.export || {};
+      const reloaded = d.reload?.executed === true && d.reload?.ok !== false;
+      const paths = [info.nginx_path, info.server_guard_path, info.json_path].filter(Boolean);
+      const reloadMessage = reload
+        ? (reloaded ? 'Rechargement confirmé' : `Aucun rechargement exécuté : ${d.reload?.message || 'mécanisme désactivé'}`)
+        : 'Aucun rechargement Nginx demandé.';
+      const message = `Fichiers générés : ${paths.length ? paths.join(' · ') : 'exports NPM Security'}.
+${reloadMessage}`;
+      if (status) {
+        status.dataset.state = 'success';
+        status.textContent = message;
+      }
+      toast(reloaded || !reload ? 'Exports Nginx et garde serveur générés' : 'Exports générés, Nginx non rechargé', reloaded || !reload ? 'success' : 'warning', 5500);
+      await loadBanEvents();
+    } catch (e) {
+      if (status) {
+        status.dataset.state = 'error';
+        status.textContent = e.message || 'Erreur pendant la génération des exports.';
+      }
+      toast(e.message || 'Erreur pendant la génération des exports', 'danger', 5500);
+    }
+  });
 }
-
 
 async function loadTrusted() {
   try {
@@ -1477,37 +1654,57 @@ async function loadTrusted() {
 }
 
 async function addTrusted() {
-  const raw = document.getElementById('trusted-input').value.trim();
-  const reason = document.getElementById('trusted-reason').value.trim();
-  if (!raw) return;
-  let type = 'ip';
-  let value = raw;
-  if (/^ua:/i.test(raw)) { type = 'ua'; value = raw.slice(3).trim(); }
-  else if (raw.includes('/')) type = 'cidr';
-  else if (/^[A-Za-z]{2}$/.test(raw)) { type = 'country'; value = raw.toUpperCase(); }
-  try {
-    const r = await adminFetch('/trusted',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type,value,reason}) });
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur whitelist');
-    document.getElementById('trusted-input').value = '';
-    document.getElementById('trusted-reason').value = '';
-    toast(`${value} ajouté à la whitelist`, 'success');
-    loadTrusted();
-    loadBanEvents();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch(e) { toast(e.message || 'Erreur ajout whitelist', 'danger'); }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('trusted-input', 'trusted-form-feedback', 'Renseigne une IP, un CIDR, un pays ou un User-Agent.')) return;
+  await withBusyButton('trusted-add', 'Ajout…', async () => {
+    const raw = document.getElementById('trusted-input').value.trim();
+    const reason = document.getElementById('trusted-reason').value.trim();
+    let type = 'ip';
+    let value = raw;
+    if (/^ua:/i.test(raw)) { type = 'ua'; value = raw.slice(3).trim(); }
+    else if (raw.includes('/')) type = 'cidr';
+    else if (/^[A-Za-z]{2}$/.test(raw)) { type = 'country'; value = raw.toUpperCase(); }
+    if (!value) {
+      formFeedback('trusted-form-feedback', 'Saisis une valeur après UA:.', 'error');
+      toast('Saisis une valeur après UA:.', 'warning');
+      document.getElementById('trusted-input')?.focus();
+      return;
+    }
+    formFeedback('trusted-form-feedback', 'Ajout de l’exception de confiance…', 'loading');
+    try {
+      const r = await adminFetch('/trusted', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,value,reason})});
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Erreur whitelist'));
+      document.getElementById('trusted-input').value = '';
+      document.getElementById('trusted-reason').value = '';
+      formFeedback('trusted-form-feedback', `${value} ajouté aux entrées de confiance.`, 'success');
+      toast(`${value} ajouté à la liste de confiance`, 'success');
+      await loadTrusted();
+      loadBanEvents();
+      if (document.body.dataset.view === 'lists') await loadSecurityLists();
+      if (document.body.dataset.view === 'control') void loadSecurityControl();
+    } catch(e) {
+      formFeedback('trusted-form-feedback', e.message || 'Erreur ajout whitelist', 'error');
+      toast(e.message || 'Erreur ajout whitelist', 'danger');
+    }
+  });
 }
 
 async function removeTrusted(id) {
+  if (!requireAdminClient()) return;
   try {
-    await adminFetch(`/trusted/${encodeURIComponent(id)}`, {method:'DELETE'});
-    toast('Entrée whitelist supprimée', 'info');
-    loadTrusted();
+    const r = await adminFetch(`/trusted/${encodeURIComponent(id)}`, {method:'DELETE'});
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(apiErrorMessage(data, 'Suppression refusée'));
+    toast('Exception de confiance supprimée', 'success');
+    await loadTrusted();
     loadBanEvents();
-    if (document.body.dataset.view === 'lists') loadSecurityLists();
-  } catch { toast('Erreur suppression whitelist', 'danger'); }
+    if (document.body.dataset.view === 'lists') await loadSecurityLists();
+    if (document.body.dataset.view === 'control') void loadSecurityControl();
+  } catch(e) {
+    toast(e.message || 'Erreur de suppression', 'danger');
+  }
 }
-
 
 // ═══════════════════════════════════════════════════════════
 //  PATCH 5.1 · SECURITY LISTS DEDICATED VIEW
@@ -1616,8 +1813,19 @@ async function simulateSavedSecurityPolicy(event) {
   const ip = document.getElementById('security-preview-ip')?.value.trim() || '';
   const host = document.getElementById('security-preview-host')?.value.trim() || '';
   const country = document.getElementById('security-preview-country')?.value.trim() || '';
-  if (!container || !ip || !host) return;
-
+  if (!container) return;
+  if (!ip || !host) {
+    const missing = !ip ? 'security-preview-ip' : 'security-preview-host';
+    const message = 'La simulation nécessite une adresse IP et un domaine cible.';
+    container.dataset.decision = 'error';
+    container.textContent = message;
+    document.getElementById(missing)?.setAttribute('aria-invalid', 'true');
+    document.getElementById(missing)?.focus();
+    toast(message, 'warning', 5500);
+    return;
+  }
+  document.getElementById('security-preview-ip')?.removeAttribute('aria-invalid');
+  document.getElementById('security-preview-host')?.removeAttribute('aria-invalid');
   const params = new URLSearchParams({ip, host});
   if (country) params.set('country_code', country);
   container.textContent = 'Évaluation des règles enregistrées…';
@@ -1654,6 +1862,7 @@ async function simulateSavedSecurityPolicy(event) {
   } catch (error) {
     container.dataset.decision = 'error';
     container.textContent = error.message || 'Impossible de simuler cette politique.';
+    toast(container.textContent, 'danger');
   }
 }
 
@@ -1939,10 +2148,6 @@ async function handleSuspectAction(event) {
 async function loadSecurityLists() {
   if (securityListsLoading) return;
   securityListsLoading = true;
-  void loadSecurityControlOverview();
-  void loadSecuritySuspects();
-  void loadObservationIncidents();
-  void loadPolicyModes();
   const blockedBody = document.getElementById('lists-blocked-body');
   const trustedBody = document.getElementById('lists-trusted-body');
   const historyBody = document.getElementById('lists-history-body');
@@ -1993,53 +2198,77 @@ async function loadSecurityLists() {
       </tr>`).join('') : emptyRow(5, '📭', 'Aucun événement');
 
     applyListTab(currentListTab);
+    return true;
   } catch (e) {
     blockedBody.innerHTML = emptyRow(7, '⚠️', 'Erreur de chargement des listes');
     trustedBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement des listes');
     historyBody.innerHTML = emptyRow(5, '⚠️', 'Erreur de chargement de l’historique');
+    toast(e.message || 'Impossible de charger les listes', 'danger');
+    return false;
   } finally {
     securityListsLoading = false;
   }
 }
 
 async function addBlockFromLists() {
-  const raw = document.getElementById('lists-block-input')?.value.trim();
-  const reason = document.getElementById('lists-block-reason')?.value.trim() || 'Manual block via lists tab';
-  const host = document.getElementById('lists-block-host')?.value.trim() || null;
-  const durationValue = document.getElementById('lists-block-duration')?.value || '';
-  const duration_minutes = durationValue ? Number(durationValue) : null;
-  if (!raw) return;
-  const {type, value} = detectListType(raw);
-  try {
-    const r = await adminFetch('/blocklist', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, reason, duration_minutes, host})});
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur blocklist');
-    document.getElementById('lists-block-input').value = '';
-    document.getElementById('lists-block-reason').value = '';
-    document.getElementById('lists-block-host').value = '';
-    toast(`${value} enregistré pour ${host || 'tous les domaines'}, application Nginx en attente`, 'success');
-    loadBlocklist();
-    loadSecurityLists();
-  } catch(e) { toast(e.message || 'Erreur ajout blocklist', 'danger'); }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('lists-block-input','lists-block-feedback','Saisis une IP, un CIDR ou un pays à bloquer.')) return;
+  await withBusyButton('lists-block-add', 'Ajout…', async () => {
+    const raw = document.getElementById('lists-block-input').value.trim();
+    const reason = document.getElementById('lists-block-reason')?.value.trim() || 'Manual block via lists tab';
+    const host = document.getElementById('lists-block-host')?.value.trim() || null;
+    const durationValue = document.getElementById('lists-block-duration')?.value || '';
+    const duration_minutes = durationValue ? Number(durationValue) : null;
+    const {type, value} = detectListType(raw);
+    formFeedback('lists-block-feedback', 'Enregistrement du blocage…', 'loading');
+    try {
+      const r = await adminFetch('/blocklist', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type, value, reason, duration_minutes, host})});
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Erreur blocklist'));
+      document.getElementById('lists-block-input').value = '';
+      document.getElementById('lists-block-reason').value = '';
+      document.getElementById('lists-block-host').value = '';
+      const message = `${value} enregistré pour ${host || 'tous les domaines'}. Application Nginx en attente.`;
+      formFeedback('lists-block-feedback', message, 'success');
+      toast(message, 'success');
+      void loadBlocklist();
+      await loadSecurityLists();
+    } catch(e) {
+      formFeedback('lists-block-feedback', e.message || 'Erreur ajout blocklist', 'error');
+      toast(e.message || 'Erreur ajout blocklist', 'danger');
+    }
+  });
 }
 
 async function addTrustedFromLists() {
-  const raw = document.getElementById('lists-trusted-input')?.value.trim();
-  const reason = document.getElementById('lists-trusted-reason')?.value.trim() || 'Trusted via lists tab';
-  if (!raw) return;
-  const {type, value} = detectListType(raw);
-  try {
-    const r = await adminFetch('/trusted', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, reason})});
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.detail || d.error || 'Erreur trusted list');
-    document.getElementById('lists-trusted-input').value = '';
-    document.getElementById('lists-trusted-reason').value = '';
-    toast(`${value} ajouté à la trusted list`, 'success');
-    loadTrusted();
-    loadSecurityLists();
-  } catch(e) { toast(e.message || 'Erreur ajout trusted list', 'danger'); }
+  if (!requireAdminClient()) return;
+  if (!requiredInput('lists-trusted-input','lists-trusted-feedback','Saisis une IP, un CIDR, un pays ou UA:... à autoriser.')) return;
+  await withBusyButton('lists-trusted-add', 'Ajout…', async () => {
+    const raw = document.getElementById('lists-trusted-input').value.trim();
+    const reason = document.getElementById('lists-trusted-reason')?.value.trim() || 'Trusted via lists tab';
+    const {type, value} = detectListType(raw);
+    if (!value) {
+      formFeedback('lists-trusted-feedback', 'Saisis une valeur après UA:.', 'error');
+      toast('Saisis une valeur après UA:.', 'warning');
+      return;
+    }
+    formFeedback('lists-trusted-feedback', 'Ajout de l’exception…', 'loading');
+    try {
+      const r = await adminFetch('/trusted',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type, value, reason})});
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(apiErrorMessage(d, 'Erreur trusted list'));
+      document.getElementById('lists-trusted-input').value = '';
+      document.getElementById('lists-trusted-reason').value = '';
+      formFeedback('lists-trusted-feedback', `${value} ajouté aux entrées de confiance.`, 'success');
+      toast(`${value} ajouté à la liste de confiance`, 'success');
+      void loadTrusted();
+      await loadSecurityLists();
+    } catch(e) {
+      formFeedback('lists-trusted-feedback', e.message || 'Erreur ajout trusted list', 'error');
+      toast(e.message || 'Erreur ajout trusted list', 'danger');
+    }
+  });
 }
-
 
 // ═══════════════════════════════════════════════════════════
 //  PATCH 5.5 · MOBILE-FIRST HOME + PWA
@@ -2192,8 +2421,24 @@ if (policyModesList) policyModesList.addEventListener('click', event => {
 });
 const securityPreviewForm = document.getElementById('security-preview-form');
 if (securityPreviewForm) securityPreviewForm.addEventListener('submit', simulateSavedSecurityPolicy);
+const controlRefresh = document.getElementById('security-control-refresh');
+if (controlRefresh) controlRefresh.addEventListener('click', () => {
+  void withBusyButton('security-control-refresh', 'Actualisation…', async () => {
+    try {
+      await loadSecurityControl();
+      toast('Actualisation terminée : consulte les états des différentes sections.', 'info');
+    } catch (err) {
+      toast(err.message || 'Actualisation impossible', 'danger');
+    }
+  });
+});
 const listsRefresh = document.getElementById('lists-refresh');
-if (listsRefresh) listsRefresh.addEventListener('click', loadSecurityLists);
+if (listsRefresh) listsRefresh.addEventListener('click', () => {
+  void withBusyButton('lists-refresh', 'Actualisation…', async () => {
+    const ok = await loadSecurityLists();
+    if (ok) toast('Listes et historique actualisés', 'success');
+  });
+});
 const listsBlockAdd = document.getElementById('lists-block-add');
 if (listsBlockAdd) listsBlockAdd.addEventListener('click', addBlockFromLists);
 const listsTrustedAdd = document.getElementById('lists-trusted-add');
@@ -2212,9 +2457,9 @@ if (notifBtn) notifBtn.addEventListener('click', enableBrowserNotifications);
 
 // Periodic refresh (stats + charts every 15s)
 setInterval(()=>{ loadStats(true); loadTimeline(); loadHeatmap(); }, 15000);
-// Keep the Observe console current without polling while the tab is hidden.
+// Keep Observe incident counts fresh only while the Control view is open.
 setInterval(() => {
-  if (document.body.dataset.view === 'lists') void loadObservationIncidents();
+  if (document.body.dataset.view === 'control') void loadObservationIncidents();
 }, 30000);
 
 // ═══════════════════════════════════════════════════════════
