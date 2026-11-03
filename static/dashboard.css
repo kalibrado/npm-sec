@@ -5302,3 +5302,125 @@ body[data-view="health"] #panel-health [data-health-card="ingestion"] {
   .ingestion-health-content { padding: 10px; }
   .ingestion-health-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+
+/* UI-managed, revisioned security configuration */
+body[data-view="config"] #panel-config [data-config-card="profile"] {
+  display: block !important;
+  width: 100% !important;
+  grid-column: 1 / -1 !important;
+  grid-area: auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+.nsd-profile-content {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.nsd-profile-notice {
+  border-left: 3px solid var(--warning);
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.nsd-profile-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.nsd-profile-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface2);
+}
+.nsd-profile-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.nsd-profile-field small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.nsd-profile-field small em {
+  display: block;
+  margin-top: 4px;
+}
+.nsd-profile-field .search {
+  width: 100%;
+  min-height: 35px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nsd-profile-field input[type=checkbox] { width: 20px; height: 20px; }
+.nsd-profile-note-label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  font-size: 12px;
+}
+.nsd-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.nsd-profile-feedback {
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 10px;
+  overflow-wrap: anywhere;
+}
+.nsd-profile-feedback[data-state=error] { color: var(--danger); }
+.nsd-profile-feedback[data-state=success] { color: var(--success); }
+.nsd-profile-feedback[data-state=loading] { color: var(--accent); }
+.nsd-profile-diff {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre;
+  max-height: 330px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface2);
+}
+.nsd-profile-revisions h3 {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.nsd-profile-revision {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.nsd-profile-revision span { min-width: 0; overflow-wrap: anywhere; }
+.nsd-profile-revision small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+@media(max-width:640px) {
+  .nsd-profile-content { padding: 9px; }
+  .nsd-profile-fields { grid-template-columns: minmax(0,1fr); }
+  .nsd-profile-revision { flex-wrap: wrap; }
+}
