@@ -168,6 +168,25 @@ dispose seulement d'un plan ; son `--apply` est bloqué jusqu'à l'agent.
 Voir [les choix d'architecture et le plan complet](docs/NSD_PRODUCT_ROADMAP.md)
 et [la documentation du premier socle configurable](docs/NSD_SECURITY_CONFIG_FOUNDATION.md).
 
+## Déploiement contrôlé par un agent hôte distinct
+
+L'onglet **Configuration** peut désormais envoyer une demande de publication
+du bundle de règles exact, lié à une révision enregistrée et à son SHA-256.
+L'historique présente les états `pending`, `claimed`, `applied`,
+`rolled_back` et `failed`. Une nouvelle modification repasse à
+`outdated` tant qu'elle n'a pas été appliquée.
+
+**Le dashboard ne possède pas le socket Docker.** L'exécutant
+`scripts/nsd-host-agent.py` fonctionne sur l'hôte NPM, avec HTTPS
+et un token spécifique. Il applique les quatre fichiers autorisés,
+teste `nginx -t`, effectue un reload gracieux et restaure ses sauvegardes
+en cas d'échec. La migration initiale des deux fichiers NPM est protégée
+par une confirmation supplémentaire.
+
+Le protocole reste **désactivé par défaut**, et aucun changement réel
+n'a été effectué sur ton NPM. Voir [la documentation complète de
+l'agent](docs/NSD_HOST_AGENT.md) pour les prérequis et les limites.
+
 ## Diagnostic de collecte NPM
 
 La vue **Santé** affiche désormais un panneau de diagnostic du collecteur :

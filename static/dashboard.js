@@ -2620,7 +2620,9 @@ function renderProfileSettings(data) {
   if (!root || !status) return;
   document.getElementById('nsd-profile-version').textContent = 'Révision ' + data.revision;
   status.textContent = data.deployment?.message || 'Aucune politique appliquée par l’agent.';
-  status.dataset.state = 'warning';
+  status.dataset.state = data.deployment?.state === 'applied' ? 'success'
+    : (['failed','rolled_back'].includes(data.deployment?.state) ? 'error' : 'warning');
+  void loadNsdDeploymentHistory();
   root.innerHTML = Object.entries(data.schema).map(([key, spec]) => {
     const value = data.settings[key];
     const id = 'nsd-profile-field-' + key;
@@ -2775,6 +2777,62 @@ async function restoreProfileRevision(revision) {
 
 document.getElementById('nsd-profile-preview-btn')?.addEventListener('click', () => void previewSecurityProfile());
 document.getElementById('nsd-profile-form')?.addEventListener('submit', saveSecurityProfile);
+
+async function loadNsdDeploymentHistory() {
+  const root = document.getElementById('nsd-deployment-history');
+  if (!root) return;
+  try {
+    const response = await fetchJsonSafe('/security-profile/deployments');
+    root.innerHTML = response.length
+      ? response.slice(0, 10).map(job => {
+          const status = String(job.status || 'unknown');
+          const good = status === 'applied' ? 'health-ok'
+            : status === 'rolled_back' || status === 'failed' ? 'health-bad' : 'health-warn';
+          return '<div class="nsd-profile-revision">' +
+            '<span><strong>#' + Number(job.id) + '</strong> · révision ' +
+            Number(job.revision) + ' · ' + esc(job.requested_by) +
+            ' · <span class="' + good + '">' + esc(status) + '</span>' +
+            '<small>' + esc(job.result_message || job.requested_at) + '</small></span>' +
+            '<span>' + esc(job.bundle_sha256?.slice(0,12)) + '</span></div>';
+        }).join('')
+      : 'Aucune demande d’application enregistrée.';
+  } catch (error) {
+    root.textContent = error.message || 'Historique indisponible';
+  }
+}
+
+async function requestNsdAgentDeployment() {
+  if (!requireAdminClient() || !nsdProfileState) return;
+  const phrase = prompt(
+    'Demander une application de la révision #' + nsdProfileState.revision +
+    ' par l’agent hôte. NSD ne recharge rien directement.\nSaisis APPLIQUER pour confirmer :'
+  );
+  if (phrase === null) return;
+  const feedback = document.getElementById('nsd-profile-feedback');
+  if (phrase !== 'APPLIQUER') {
+    feedback.dataset.state = 'error';
+    feedback.textContent = 'Confirmation invalide : saisir exactement APPLIQUER.';
+    return;
+  }
+  await withBusyButton('nsd-profile-deploy-btn', 'Demande…', async () => {
+    try {
+      const result = await profileApi('/security-profile/deployments/request', {
+        expected_revision: nsdProfileState.revision,
+        confirmation: 'APPLIQUER',
+      });
+      await loadSecurityProfile();
+      feedback.dataset.state = 'success';
+      feedback.textContent = 'Demande #' + result.id +
+        ' enregistrée. Le statut restera en attente jusqu’à une confirmation de l’agent.';
+      toast('Demande envoyée à la file NSD, sans reload direct', 'success');
+    } catch(error) {
+      feedback.dataset.state = 'error';
+      feedback.textContent = error.message || 'Demande d’application refusée';
+      toast(feedback.textContent, 'danger');
+    }
+  });
+}
+document.getElementById('nsd-profile-deploy-btn')?.addEventListener('click', () => void requestNsdAgentDeployment());
 
 async function loadRuntimeConfig() {
   try {

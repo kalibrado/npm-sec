@@ -630,9 +630,11 @@
       <div class="nsd-profile-actions">
         <button class="page-btn" id="nsd-profile-preview-btn" type="button">Prévisualiser et vérifier</button>
         <button class="apply-btn compact" id="nsd-profile-save-btn" type="submit">Enregistrer une révision</button>
+        <button class="page-btn" id="nsd-profile-deploy-btn" type="button">Demander l’application par l’agent</button>
       </div>
     </form>
     <div id="nsd-profile-feedback" role="status" aria-live="polite" class="nsd-profile-feedback"></div>
+    <section class="nsd-deployment-history" aria-label="Historique des demandes d'application"><h3>Déploiements (Nginx)</h3><div id="nsd-deployment-history">Aucune demande.</div></section>
     <details id="nsd-profile-diff-wrap">
       <summary>Diff Nginx du candidat (sans application)</summary>
       <pre id="nsd-profile-diff" class="nsd-profile-diff"></pre>

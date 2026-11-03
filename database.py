@@ -295,6 +295,26 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_security_profile_revisions_created "
             "ON security_profile_revisions(created_at DESC)"
         )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS nsd_deployment_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                revision INTEGER NOT NULL,
+                requested_by TEXT NOT NULL,
+                bundle_sha256 TEXT NOT NULL,
+                bundle_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','claimed','applied','failed','rolled_back')),
+                requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+                claimed_at TEXT,
+                completed_at TEXT,
+                reported_hash TEXT,
+                result_message TEXT NOT NULL DEFAULT ''
+            )"""
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_nsd_deployments_status "
+            "ON nsd_deployment_jobs(status, id)"
+        )
         admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
         if admin_count == 0:
             if DEFAULT_ADMIN_PASSWORD:
