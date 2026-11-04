@@ -192,8 +192,10 @@ def test_agent_is_inert_by_default_and_refuses_unsafe_inputs(tmp_path, monkeypat
     assert agent.token_file(secret) == TOKEN
     link = tmp_path / "link"
     link.symlink_to(secret)
-    with pytest.raises(ValueError):
+    # O_NOFOLLOW refuses the symlink at open(2), raising ELOOP.
+    with pytest.raises(OSError) as exc:
         agent.token_file(link)
+    assert exc.value.errno == 40
 
 
 class FakeNPM:
