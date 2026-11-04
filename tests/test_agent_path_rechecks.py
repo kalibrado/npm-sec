@@ -18,7 +18,7 @@ class RollbackPathRecheckTests(unittest.TestCase):
             folder = Path(directory)
             for name in agent.SNIPPETS:
                 (folder / name).write_text("saved", encoding="utf-8")
-            docker = Mock()
+            docker = Mock(spec=agent.DockerNPM)
             docker.container = "npm"
             manifest = {
                 "container": "npm",
@@ -36,7 +36,7 @@ class RollbackPathRecheckTests(unittest.TestCase):
             folder = Path(directory)
             for name in agent.SNIPPETS:
                 (folder / name).write_text("saved", encoding="utf-8")
-            docker = Mock()
+            docker = Mock(spec=agent.DockerNPM)
             docker.container = "npm"
             # Initial preflight passes; first write passes; next check fails.
             docker.assert_safe_paths.side_effect = [
