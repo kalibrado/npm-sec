@@ -75,3 +75,5 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Incrément snapshot (04/11) : revalider les chemins NPM avant chaque sondage de présence et chaque copie de sauvegarde, avec tests de régression. Réduction de fenêtre TOCTOU uniquement : Docker cp reste non confiné ; aucun déploiement réel autorisé.
 
 - Incrément snapshot (04/11, PR dédiée) : après chaque copie de sauvegarde, refuser un fichier absent ou un lien symbolique avant toute mutation NPM. Tests de non-régression pour copie silencieusement incomplète, symlink et fichier régulier. Cette vérification reste sensible aux courses TOCTOU et ne remplace pas les primitives confinées.
+
+- Incrément validation UTF-8 (04/11, PR dédiée) : les limites de taille des fichiers et du bundle de l'agent sont désormais évaluées sur les octets UTF-8 réellement transférés, et non sur le nombre de caractères Python. Tests de dépassement individuel et cumulé avec caractères multioctets. Aucun déploiement réel autorisé ; confinement TOCTOU toujours incomplet.

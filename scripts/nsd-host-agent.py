@@ -70,10 +70,10 @@ def validate_job(job):
         raise ValueError("Empreinte de travail invalide")
     if type(files) is not dict or set(files) != set(FILENAMES):
         raise ValueError("Ensemble de fichiers non autorisé")
-    if any(type(data) is not str or not data or len(data) > 1024 * 1024 or
+    if any(type(data) is not str or not data or len(data.encode("utf-8")) > 1024 * 1024 or
            "\0" in data for data in files.values()):
         raise ValueError("Contenu de fichier Nginx invalide ou trop grand")
-    if sum(len(data) for data in files.values()) > 2 * 1024 * 1024:
+    if sum(len(data.encode("utf-8")) for data in files.values()) > 2 * 1024 * 1024:
         raise ValueError("Bundle trop volumineux")
     if hash_bundle(files) != supplied:
         raise ValueError("Empreinte SHA-256 non concordante")
