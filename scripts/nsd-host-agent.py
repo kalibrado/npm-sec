@@ -132,10 +132,20 @@ class NSDClient:
 
 def token_file(path):
     path = Path(path)
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
-        raise ValueError("Le token agent doit être un fichier régulier chmod 600 (sans lien symbolique)")
-    token = path.read_text(encoding="utf-8").strip()
+    # Open and validate the same inode: lstat() followed by read_text()
+    # allows a symlink swap between the check and the actual read.
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
+            raise ValueError("Le token agent doit être un fichier régulier chmod 600 (sans lien symbolique)")
+        with os.fdopen(fd, "r", encoding="utf-8") as stream:
+            fd = -1
+            token = stream.read(4097).strip()
+    finally:
+        if fd >= 0:
+            os.close(fd)
     if len(token) < 32:
         raise ValueError("Token agent trop court")
     return token
