@@ -69,3 +69,5 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Incrément TOCTOU (04/11, PR dédiée) : nouvelle vérification des chemins NPM avant chaque copie, suppression et renommage, y compris en rollback. Cette mesure réduit la fenêtre de course mais **ne garantit pas** l'absence de TOCTOU : il reste à remplacer les opérations Docker `cp/mv/rm` par des primitives confinées sans suivi de symlink, à valider en recette isolée. Aucun déploiement NPM réel autorisé.
 
 - Incrément agent token (04/11) : lecture du secret avec `O_NOFOLLOW` et validation des permissions sur le descripteur ouvert (`fstat`) pour empêcher un échange de symlink entre contrôle et lecture. Tests dédiés. Ce correctif ne confine pas les mutations de fichiers NPM et n'autorise aucune application réelle.
+
+- Incrément limite token (04/11) : refuser les fichiers de secret agent dépassant 4096 caractères avant suppression des espaces, afin de ne pas accepter silencieusement un fichier tronqué. Tests aux limites. Ne concerne pas le confinement des écritures NPM ; aucun déploiement réel autorisé.

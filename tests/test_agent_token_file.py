@@ -21,6 +21,21 @@ class TokenFileTests(unittest.TestCase):
             path.chmod(0o600)
             self.assertEqual(agent.token_file(path), "a" * 40)
 
+    def test_rejects_oversized_token_even_if_trailing_whitespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "token"
+            path.write_text("a" * 40 + " " * 4057, encoding="utf-8")
+            path.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, "trop volumineux"):
+                agent.token_file(path)
+
+    def test_accepts_token_at_maximum_size(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "token"
+            path.write_text("a" * 4096, encoding="utf-8")
+            path.chmod(0o600)
+            self.assertEqual(agent.token_file(path), "a" * 4096)
+
     def test_rejects_symlink(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "target"
