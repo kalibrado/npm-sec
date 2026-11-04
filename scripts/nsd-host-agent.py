@@ -142,12 +142,13 @@ def token_file(path):
             raise ValueError("Le token agent doit être un fichier régulier chmod 600 (sans lien symbolique)")
         with os.fdopen(fd, "r", encoding="utf-8") as stream:
             fd = -1
-            token = stream.read(4097).strip()
+            raw = stream.read(4097)
+            if len(raw) > 4096:
+                raise ValueError("Fichier token agent trop volumineux (maximum 4096 caractères)")
+            token = raw.strip()
     finally:
         if fd >= 0:
             os.close(fd)
-    if len(token) > 4096:
-        raise ValueError("Token agent trop long (maximum 4096 caractères)")
     if len(token) < 32:
         raise ValueError("Token agent trop court")
     return token
