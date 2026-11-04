@@ -42,7 +42,7 @@ class AgentPathSafetyTests(unittest.TestCase):
                         agent.DockerNPM("npm").assert_safe_paths()
 
     def test_rollback_rechecks_paths_before_restoring_files(self):
-        docker = Mock(container="npm")
+        docker = Mock(spec=agent.DockerNPM, container="npm")
         docker.assert_safe_paths.side_effect = RuntimeError("Chemin NPM symbolique interdit")
         manifest = {"container": "npm", "existed": {name: True for name in agent.SNIPPETS}}
         with self.assertRaisesRegex(RuntimeError, "symbolique"):
