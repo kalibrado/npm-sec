@@ -240,8 +240,12 @@ def snapshot(docker, state_dir, job_id):
     folder.mkdir(mode=0o700, parents=True, exist_ok=False)
     existed = {}
     for name, target in SNIPPETS.items():
+        # Recheck before both existence probing and backup reads. A path
+        # changed since apply_job's initial preflight must fail closed.
+        docker.assert_safe_paths()
         existed[name] = docker.exists(target)
         if existed[name]:
+            docker.assert_safe_paths()
             docker.copy_from(target, folder / name)
     manifest = {
         "container": docker.container,
