@@ -77,3 +77,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Incrément snapshot (04/11, PR dédiée) : après chaque copie de sauvegarde, refuser un fichier absent ou un lien symbolique avant toute mutation NPM. Tests de non-régression pour copie silencieusement incomplète, symlink et fichier régulier. Cette vérification reste sensible aux courses TOCTOU et ne remplace pas les primitives confinées.
 
 - Incrément validation UTF-8 (04/11, PR dédiée) : les limites de taille des fichiers et du bundle de l'agent sont désormais évaluées sur les octets UTF-8 réellement transférés, et non sur le nombre de caractères Python. Tests de dépassement individuel et cumulé avec caractères multioctets. Aucun déploiement réel autorisé ; confinement TOCTOU toujours incomplet.
+
+## Incrément schéma typé (04/11/2026)
+
+- Nouveau module `services/nginx_settings_schema.py` : validation stricte d'un premier sous-ensemble de six réglages (auto-ban, pays, CIDR proxies, rate/burst), types exacts, bornes et rejet des clés inconnues ; tests de régression dédiés.
+- Import initial exige un SHA-256 explicite des sources historiques. **Aucune valeur de `http_top.conf` ou `server_proxy.conf` n'est inventée ou importée automatiquement.**
+- Ce module n'est pas encore connecté à SQLite, à l'API ni à l'interface ; il ne génère aucune configuration et ne déclenche aucun reload. Étape suivante : extraction contrôlée des valeurs héritées, migration persistante et UI admin avec révisions/diff.
