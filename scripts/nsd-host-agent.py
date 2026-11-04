@@ -146,6 +146,8 @@ def token_file(path):
     finally:
         if fd >= 0:
             os.close(fd)
+    if len(token) > 4096:
+        raise ValueError("Token agent trop long (maximum 4096 caractères)")
     if len(token) < 32:
         raise ValueError("Token agent trop court")
     return token
