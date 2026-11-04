@@ -18,6 +18,9 @@ class SnapshotPathRecheckTests(unittest.TestCase):
             docker = Mock(spec=agent.DockerNPM)
             docker.container = "npm"
             docker.exists.return_value = True
+            def write_backup(_target, destination):
+                destination.write_text("saved config", encoding="utf-8")
+            docker.copy_from.side_effect = write_backup
             agent.snapshot(docker, Path(directory), 17)
             self.assertEqual(docker.exists.call_count, len(agent.SNIPPETS))
             self.assertEqual(docker.copy_from.call_count, len(agent.SNIPPETS))
