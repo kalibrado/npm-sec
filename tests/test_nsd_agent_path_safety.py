@@ -44,9 +44,14 @@ class AgentPathSafetyTests(unittest.TestCase):
     def test_rollback_rechecks_paths_before_restoring_files(self):
         docker = Mock(spec=agent.DockerNPM, container="npm")
         docker.assert_safe_paths.side_effect = RuntimeError("Chemin NPM symbolique interdit")
+        from tempfile import TemporaryDirectory
         manifest = {"container": "npm", "existed": {name: True for name in agent.SNIPPETS}}
-        with self.assertRaisesRegex(RuntimeError, "symbolique"):
-            agent.rollback(docker, Path("/unused-backup"), manifest)
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for name in agent.SNIPPETS:
+                (folder / name).write_text("original", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "symbolique"):
+                agent.rollback(docker, folder, manifest)
         docker.assert_safe_paths.assert_called_once_with()
         docker.copy_to.assert_not_called()
         docker.exec.assert_not_called()
