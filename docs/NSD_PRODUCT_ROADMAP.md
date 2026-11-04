@@ -73,3 +73,5 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Incrément limite token (04/11) : refuser les fichiers de secret agent dépassant 4096 caractères avant suppression des espaces, afin de ne pas accepter silencieusement un fichier tronqué. Tests aux limites. Ne concerne pas le confinement des écritures NPM ; aucun déploiement réel autorisé.
 
 - Incrément snapshot (04/11) : revalider les chemins NPM avant chaque sondage de présence et chaque copie de sauvegarde, avec tests de régression. Réduction de fenêtre TOCTOU uniquement : Docker cp reste non confiné ; aucun déploiement réel autorisé.
+
+- Incrément snapshot (04/11, PR dédiée) : après chaque copie de sauvegarde, refuser un fichier absent ou un lien symbolique avant toute mutation NPM. Tests de non-régression pour copie silencieusement incomplète, symlink et fichier régulier. Cette vérification reste sensible aux courses TOCTOU et ne remplace pas les primitives confinées.
