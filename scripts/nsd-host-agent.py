@@ -159,11 +159,18 @@ class DockerNPM:
         return self.run("exec", self.container, *args)
 
     def exists(self, path):
-        return subprocess.run(
+        result = subprocess.run(
             ["docker", "exec", self.container, "test", "-f", path],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=15, check=False,
-        ).returncode == 0
+        )
+        if result.returncode == 0:
+            return True
+        if result.returncode == 1:
+            return False
+        # Docker exec failures (e.g. 125) must never mean "file absent":
+        # snapshot/rollback would otherwise discard an existing NPM file.
+        raise RuntimeError("Impossible de vérifier la présence du fichier NPM")
 
     def copy_from(self, remote, local):
         self.run("cp", f"{self.container}:{remote}", str(local))
