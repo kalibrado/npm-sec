@@ -57,3 +57,9 @@ Pour limiter les coupures, utiliser `nginx -t` avant reload ; le reload Nginx gr
 ## Décisions de stack
 
 Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **FastAPI + Python 3.12, SQLite, JavaScript actuel et SSE, Docker Compose**. Le frontend pourra être isolé progressivement plutôt que de déclencher une réécriture React sans besoin démontré. La version Helm/OpenShift reste une cible ultérieure. Le service applicateur s'exécute sur l'hôte et reste indépendant du dashboard web.
+
+## Suivi incrémental de l'agent (04/11/2026)
+
+- PR #32 : vérification des chemins NPM symboliques avant publication et rollback, fusionnée dans `dev` après CI Backend tests #66 verte. Ce contrôle n'élimine pas encore les races TOCTOU entre vérification et écriture.
+- Incrément suivant : la vérification d'existence Docker doit distinguer absence réelle (code 1) et erreur d'exécution (codes 2/125/126/127/etc.). Toute erreur doit interrompre le snapshot sans marquer un fichier comme absent ; tests de régression dédiés. Aucun déploiement réel autorisé.
+- À traiter ensuite : confinement résistant aux changements concurrents de chemins, permissions de l'agent, puis schéma UI exhaustif et compilateur validé.
