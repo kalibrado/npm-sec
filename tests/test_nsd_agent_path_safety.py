@@ -51,6 +51,32 @@ class AgentPathSafetyTests(unittest.TestCase):
         docker.copy_to.assert_not_called()
         docker.exec.assert_not_called()
 
+    def test_rollback_preflights_all_backups_before_any_write(self):
+        from tempfile import TemporaryDirectory
+        docker = Mock(spec=agent.DockerNPM, container="npm")
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            existed = {name: True for name in agent.SNIPPETS}
+            # Even if the first backup is valid, a missing later file must
+            # abort before any original hook is restored.
+            (folder / next(iter(agent.HOOKS))).write_text("original")
+            manifest = {"container": "npm", "existed": existed}
+            with self.assertRaisesRegex(RuntimeError, "Sauvegarde manquante"):
+                agent.rollback(docker, folder, manifest)
+        docker.copy_to.assert_not_called()
+        docker.exec.assert_not_called()
+
+    def test_rollback_rejects_non_boolean_manifest_values(self):
+        docker = Mock(spec=agent.DockerNPM, container="npm")
+        manifest = {
+            "container": "npm",
+            "existed": {name: "false" for name in agent.SNIPPETS},
+        }
+        with self.assertRaisesRegex(RuntimeError, "non booléenne"):
+            agent.rollback(docker, Path("/unused-backup"), manifest)
+        docker.copy_to.assert_not_called()
+        docker.exec.assert_not_called()
+
     def test_exists_distinguishes_missing_file_from_docker_failure(self):
         docker = agent.DockerNPM("npm")
         for code, expected in ((0, True), (1, False)):
