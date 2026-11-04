@@ -71,3 +71,5 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Incrément agent token (04/11) : lecture du secret avec `O_NOFOLLOW` et validation des permissions sur le descripteur ouvert (`fstat`) pour empêcher un échange de symlink entre contrôle et lecture. Tests dédiés. Ce correctif ne confine pas les mutations de fichiers NPM et n'autorise aucune application réelle.
 
 - Incrément limite token (04/11) : refuser les fichiers de secret agent dépassant 4096 caractères avant suppression des espaces, afin de ne pas accepter silencieusement un fichier tronqué. Tests aux limites. Ne concerne pas le confinement des écritures NPM ; aucun déploiement réel autorisé.
+
+- Incrément snapshot (04/11) : revalider les chemins NPM avant chaque sondage de présence et chaque copie de sauvegarde, avec tests de régression. Réduction de fenêtre TOCTOU uniquement : Docker cp reste non confiné ; aucun déploiement réel autorisé.
