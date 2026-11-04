@@ -246,7 +246,12 @@ def snapshot(docker, state_dir, job_id):
         existed[name] = docker.exists(target)
         if existed[name]:
             docker.assert_safe_paths()
-            docker.copy_from(target, folder / name)
+            backup = folder / name
+            docker.copy_from(target, backup)
+            # A successful docker cp exit code does not prove that a usable
+            # regular backup exists. Never proceed to mutate NPM otherwise.
+            if backup.is_symlink() or not backup.is_file():
+                raise RuntimeError(f"Sauvegarde NPM non régulière : {name}")
     manifest = {
         "container": docker.container,
         "job_id": job_id,
