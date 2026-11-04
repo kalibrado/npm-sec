@@ -63,3 +63,5 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - PR #32 : vérification des chemins NPM symboliques avant publication et rollback, fusionnée dans `dev` après CI Backend tests #66 verte. Ce contrôle n'élimine pas encore les races TOCTOU entre vérification et écriture.
 - Incrément suivant : la vérification d'existence Docker doit distinguer absence réelle (code 1) et erreur d'exécution (codes 2/125/126/127/etc.). Toute erreur doit interrompre le snapshot sans marquer un fichier comme absent ; tests de régression dédiés. Aucun déploiement réel autorisé.
 - À traiter ensuite : confinement résistant aux changements concurrents de chemins, permissions de l'agent, puis schéma UI exhaustif et compilateur validé.
+
+- Incrément rollback (PR en cours) : vérifier la totalité des sauvegardes et les booléens du manifeste avant toute écriture sur NPM ; tests de non-restauration partielle. Cette prévalidation ne résout pas les races TOCTOU ni l'absence de preuve Nginx réelle. Ne pas activer l'agent en production.
