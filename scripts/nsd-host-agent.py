@@ -247,6 +247,17 @@ def rollback(docker, folder, manifest):
     existed = manifest.get("existed")
     if type(existed) is not dict or set(existed) != set(SNIPPETS):
         raise RuntimeError("Manifest de sauvegarde invalide")
+    if any(type(value) is not bool for value in existed.values()):
+        raise RuntimeError("Manifest de sauvegarde invalide : présence non booléenne")
+    # Validate the entire backup set before touching any NPM file: a missing
+    # later backup must not leave earlier hooks partially restored.
+    for name, was_present in existed.items():
+        if was_present:
+            backup = folder / name
+            if not backup.is_file() or backup.is_symlink():
+                raise RuntimeError(f"Sauvegarde manquante : {name}")
+        elif name in HOOKS:
+            raise RuntimeError("Hook NPM original manquant; retour arrière manuel requis")
     # Revalidate confinement on recovery, not only on initial application.
     docker.assert_safe_paths()
     # Restore originals first. Only remove newly-created files after original
@@ -256,8 +267,6 @@ def rollback(docker, folder, manifest):
         path = SNIPPETS[name]
         if existed[name]:
             backup = folder / name
-            if not backup.is_file() or backup.is_symlink():
-                raise RuntimeError(f"Sauvegarde manquante : {name}")
             docker.copy_to(backup, path)
         else:
             if name in HOOKS:
