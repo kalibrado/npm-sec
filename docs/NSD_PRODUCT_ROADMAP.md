@@ -65,3 +65,5 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - À traiter ensuite : confinement résistant aux changements concurrents de chemins, permissions de l'agent, puis schéma UI exhaustif et compilateur validé.
 
 - Incrément rollback (PR en cours) : vérifier la totalité des sauvegardes et les booléens du manifeste avant toute écriture sur NPM ; tests de non-restauration partielle. Cette prévalidation ne résout pas les races TOCTOU ni l'absence de preuve Nginx réelle. Ne pas activer l'agent en production.
+
+- Incrément TOCTOU (04/11, PR dédiée) : nouvelle vérification des chemins NPM avant chaque copie, suppression et renommage, y compris en rollback. Cette mesure réduit la fenêtre de course mais **ne garantit pas** l'absence de TOCTOU : il reste à remplacer les opérations Docker `cp/mv/rm` par des primitives confinées sans suivi de symlink, à valider en recette isolée. Aucun déploiement NPM réel autorisé.
