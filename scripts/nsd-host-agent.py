@@ -264,6 +264,10 @@ def rollback(docker, folder, manifest):
     # native hooks have been restored, so no active include is left dangling.
     order = list(HOOKS) + list(FILENAMES)
     for name in order:
+        # Recheck before each mutation, not only once at rollback start.
+        # This narrows the race window; it is NOT a substitute for
+        # descriptor-relative, no-follow operations in the host agent.
+        docker.assert_safe_paths()
         path = SNIPPETS[name]
         if existed[name]:
             backup = folder / name
@@ -320,7 +324,9 @@ def apply_job(docker, state_dir, job, bootstrap=False):
                 local.write(job["files"][name])
                 pathname = Path(local.name)
             try:
+                docker.assert_safe_paths()
                 docker.copy_to(pathname, remote + ".candidate")
+                docker.assert_safe_paths()
                 docker.exec("mv", "-f", remote + ".candidate", remote)
             finally:
                 pathname.unlink(missing_ok=True)
@@ -334,7 +340,9 @@ def apply_job(docker, state_dir, job, bootstrap=False):
                     local.write(snippet)
                     pathname = Path(local.name)
                 try:
+                    docker.assert_safe_paths()
                     docker.copy_to(pathname, SNIPPETS[name] + ".candidate")
+                    docker.assert_safe_paths()
                     docker.exec("mv", "-f", SNIPPETS[name] + ".candidate", SNIPPETS[name])
                 finally:
                     pathname.unlink(missing_ok=True)
