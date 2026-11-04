@@ -171,6 +171,27 @@ class DockerNPM:
     def copy_to(self, local, remote):
         self.run("cp", str(local), f"{self.container}:{remote}")
 
+    def assert_safe_paths(self):
+        """Refuse symlinks in NPM custom paths before any write or snapshot."""
+        paths = tuple(dict.fromkeys((
+            "/data", "/data/nginx", CUSTOM, TARGET,
+            *(parent for target in SNIPPETS.values() for parent in
+              (str(Path(target).parent),)),
+            *SNIPPETS.values(),
+            *(target + ".candidate" for target in SNIPPETS.values()),
+        )))
+        for path in paths:
+            # docker exec test returns 1 for missing paths, which is safe here.
+            result = subprocess.run(
+                ["docker", "exec", self.container, "test", "-L", path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=15, check=False,
+            )
+            if result.returncode == 0:
+                raise RuntimeError("Chemin NPM symbolique interdit")
+            if result.returncode != 1:
+                raise RuntimeError("Impossible de vérifier les chemins NPM")
+
     def check(self):
         if self.run("inspect", "-f", "{{.State.Running}}", self.container).strip() != "true":
             raise RuntimeError("Conteneur NPM arrêté")
@@ -219,6 +240,8 @@ def rollback(docker, folder, manifest):
     existed = manifest.get("existed")
     if type(existed) is not dict or set(existed) != set(SNIPPETS):
         raise RuntimeError("Manifest de sauvegarde invalide")
+    # Revalidate confinement on recovery, not only on initial application.
+    docker.assert_safe_paths()
     # Restore originals first. Only remove newly-created files after original
     # native hooks have been restored, so no active include is left dangling.
     order = list(HOOKS) + list(FILENAMES)
@@ -259,6 +282,7 @@ def recover(docker, state_dir):
 def apply_job(docker, state_dir, job, bootstrap=False):
     job_id = validate_job(job)
     docker.check()
+    docker.assert_safe_paths()
     if bootstrap and not all(docker.exists(SNIPPETS[name]) for name in HOOKS):
         raise RuntimeError(
             "Bootstrap refusé : les deux fichiers NPM existants doivent être sauvegardables"
