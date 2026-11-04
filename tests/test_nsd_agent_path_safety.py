@@ -51,6 +51,32 @@ class AgentPathSafetyTests(unittest.TestCase):
         docker.copy_to.assert_not_called()
         docker.exec.assert_not_called()
 
+    def test_exists_distinguishes_missing_file_from_docker_failure(self):
+        docker = agent.DockerNPM("npm")
+        for code, expected in ((0, True), (1, False)):
+            with self.subTest(code=code):
+                with patch.object(agent.subprocess, "run",
+                                  return_value=subprocess.CompletedProcess([], code)) as run:
+                    self.assertIs(docker.exists(agent.TARGET + "/http-security.conf"), expected)
+                    self.assertEqual(run.call_args.args[0][:4],
+                                     ["docker", "exec", "npm", "test"])
+
+        for code in (2, 125, 126, 127, 137):
+            with self.subTest(failure_code=code):
+                with patch.object(agent.subprocess, "run",
+                                  return_value=subprocess.CompletedProcess([], code)):
+                    with self.assertRaisesRegex(RuntimeError, "présence"):
+                        docker.exists(agent.TARGET + "/http-security.conf")
+
+    def test_snapshot_never_copies_or_records_missing_on_docker_error(self):
+        from tempfile import TemporaryDirectory
+        docker = Mock(spec=agent.DockerNPM, container="npm")
+        docker.exists.side_effect = RuntimeError("Impossible de vérifier la présence du fichier NPM")
+        with TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, "présence"):
+                agent.snapshot(docker, Path(directory), 1)
+        docker.copy_from.assert_not_called()
+
     def test_docker_error_is_not_treated_as_absent_symlink(self):
         with patch.object(agent.subprocess, "run", return_value=subprocess.CompletedProcess([], 125)):
             with self.assertRaisesRegex(RuntimeError, "vérifier"):
