@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_deps import require_viewer
 from database import get_db
-from services.nginx_settings_diff import RevisionIntegrityError
+from services.nginx_settings_diff import (
+    RevisionIntegrityError, RevisionNotFound, compare_settings_revisions,
+)
 from services.nginx_settings_history import list_settings_revisions
 from services.nginx_settings_revisions import latest_settings_revision
 
@@ -32,5 +34,19 @@ def draft_history(
             return {"revisions": list_settings_revisions(
                 conn, limit=limit, before_revision=before_revision
             )}
+        except (RevisionIntegrityError, ValueError):
+            raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+
+
+@router.get("/diff", dependencies=[Depends(require_viewer)])
+def draft_diff(
+    before_revision: int = Query(ge=1),
+    after_revision: int = Query(ge=1),
+):
+    with get_db() as conn:
+        try:
+            return compare_settings_revisions(conn, before_revision, after_revision)
+        except RevisionNotFound:
+            raise HTTPException(status_code=404, detail="Settings revision not found")
         except (RevisionIntegrityError, ValueError):
             raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
