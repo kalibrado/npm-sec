@@ -1257,7 +1257,26 @@ function initMap() {
     zoomControl:false, attributionControl:false, scrollWheelZoom:true,
     dragging:true, doubleClickZoom:true, center:[30,10], zoom:2, minZoom:2, maxZoom:8,
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  // CARTO raster endpoint for Leaflet. Vector style.json requires MapLibre GL JS.
+  const cartoKey = String(window.NSD_CARTO_BASEMAP_KEY || '').trim();
+  if (cartoKey) {
+    const tiles = L.tileLayer(
+      'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=' + encodeURIComponent(cartoKey),
+      {maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}
+    );
+    tiles.on('tileerror', () => {
+      const status = document.getElementById('map-basemap-status');
+      if (status) status.textContent = 'Fond CARTO indisponible : vérifier la clé API, les restrictions de domaine et le réseau.';
+    });
+    tiles.on('load', () => {
+      const status = document.getElementById('map-basemap-status');
+      if (status) status.textContent = '';
+    });
+    tiles.addTo(map);
+  } else {
+    const status = document.getElementById('map-basemap-status');
+    if (status) status.textContent = 'Fond de carte non configuré : renseigner CARTO_BASEMAP_API_KEY dans l’environnement NSD.';
+  }
   L.control.zoom({position:'bottomright'}).addTo(map);
   ensureMapHud();
 }

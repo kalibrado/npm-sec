@@ -89,6 +89,7 @@
 <!-- ── MAP ── -->
 <div class="map-section" id="map-section">
 <div id="map"></div>
+<div id="map-basemap-status" role="status" aria-live="polite" class="map-basemap-status"></div>
 <div class="map-controls">
 <button class="map-ctrl-btn" id="choropleth-btn" title="Carte choroplèthe">🗺</button>
 </div>
@@ -943,6 +944,7 @@
 <!-- ── TOAST ── -->
 <div id="toast-zone" role="status" aria-live="polite" aria-atomic="false"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>window.NSD_CARTO_BASEMAP_KEY = {{ carto_basemap_api_key | tojson }};</script>
 <script src="/static/dashboard.js"></script>
 </body>
 </html>
