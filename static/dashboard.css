@@ -5454,3 +5454,20 @@ body[data-view="config"] #panel-config [data-config-card="profile"] {
   .nsd-settings-group { padding: 8px; }
   .nsd-settings-group-fields { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* CARTO basemap diagnostics, shown only when tiles cannot load. */
+.map-basemap-status:not(:empty) {
+  position: absolute;
+  z-index: 600;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(90%, 520px);
+  padding: 9px 13px;
+  border-radius: 8px;
+  background: rgba(20, 25, 35, .94);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+}
