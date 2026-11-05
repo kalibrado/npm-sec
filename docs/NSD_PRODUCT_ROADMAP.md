@@ -101,3 +101,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - `services/nginx_settings_history.py` : lecture paginée des métadonnées des brouillons SQLite, ordre décroissant et curseur stable, contrôle SHA-256 et schéma de chaque révision avant affichage. Aucune charge utile de réglages dans la liste.
 - Tests : ordre, pagination, limites, corruption et absence de mutation.
 - **Limites** : aucun endpoint ni contrôle d'accès HTTP à ce stade ; ne jamais exposer ce module directement aux utilisateurs non authentifiés. Aucune application Nginx. Prochain incrément : API admin avec autorisation serveur, puis UI.
+
+## Incrément lecture de la dernière révision (05/11/2026)
+
+- `latest_settings_revision` vérifie désormais le SHA-256, le schéma canonique et le statut DRAFT avant de retourner une configuration. Une altération fait échouer la lecture au lieu d'exposer un brouillon non fiable.
+- Tests dédiés : absence de révision, lecture valide, hash incorrect, schéma invalide avec hash recalculé, JSON non canonique, statut invalide et lecture sans mutation.
+- **Limites** : pas encore d'API authentifiée ni d'édition UI ; aucune application Nginx. Prochaine étape : endpoint de lecture admin/viewer protégé et endpoint d'écriture admin avec audit.
