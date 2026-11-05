@@ -87,3 +87,21 @@ test('restoration refreshes current revision and history', async () => {
   assert.equal(h.element('typed-drafts-restore-btn').disabled, true);
   assert.match(h.element('typed-drafts-restore-message').textContent, /nouveau brouillon/);
 });
+
+test('older comparison cannot unlock button while a newer request is pending', async () => {
+  const h = harness();
+  await tick(); await tick();
+  const click = h.element('typed-drafts-compare-btn').listeners.click;
+  const first = click();
+  h.element('typed-drafts-before').value = '2';
+  h.element('typed-drafts-before').listeners.change();
+  const second = click();
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.element('typed-drafts-compare-btn').disabled, true);
+  h.requests[0].resolve(response({changes: {}}));
+  await first;
+  assert.equal(h.element('typed-drafts-compare-btn').disabled, true);
+  h.requests[1].resolve(response({changes: {}}));
+  await second;
+  assert.equal(h.element('typed-drafts-compare-btn').disabled, false);
+});
