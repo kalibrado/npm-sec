@@ -107,3 +107,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - `latest_settings_revision` vérifie désormais le SHA-256, le schéma canonique et le statut DRAFT avant de retourner une configuration. Une altération fait échouer la lecture au lieu d'exposer un brouillon non fiable.
 - Tests dédiés : absence de révision, lecture valide, hash incorrect, schéma invalide avec hash recalculé, JSON non canonique, statut invalide et lecture sans mutation.
 - **Limites** : pas encore d'API authentifiée ni d'édition UI ; aucune application Nginx. Prochaine étape : endpoint de lecture admin/viewer protégé et endpoint d'écriture admin avec audit.
+
+## Incrément API de lecture des brouillons (05/11/2026, PR dédiée)
+
+- Routes `GET /api/nginx-settings/latest` et `GET /api/nginx-settings/history` : authentification obligatoire via `require_viewer` (admin ou viewer), vérification SHA-256 et schéma, pagination bornée, erreurs 409 si corruption. Les métadonnées d'historique ne contiennent pas le JSON des réglages.
+- Initialisation de la table des brouillons au démarrage après `init_db()`, sans écraser les tables existantes. Tests HTTP : 401 sans session, 200 viewer, validation des bornes, rejet des révisions altérées.
+- **Limites** : lecture uniquement, pas encore de POST admin, ni UI, ni import des fichiers historiques. Aucun déploiement ou reload Nginx. Prochaine étape : écriture admin authentifiée avec contrôle de concurrence et protection CSRF.
