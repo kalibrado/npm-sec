@@ -11,7 +11,7 @@ from auth_deps import require_admin, require_viewer
 from database import get_db
 from services.nginx_settings_schema import settings_schema_metadata
 from services.nginx_settings_diff import (
-    RevisionIntegrityError, RevisionNotFound, compare_settings_revisions,
+    RevisionIntegrityError, RevisionNotFound, compare_settings_revisions, _read_revision,
 )
 from services.nginx_settings_history import list_settings_revisions
 from services.nginx_settings_schema import import_legacy_defaults
@@ -47,6 +47,19 @@ def draft_history(
             return {"revisions": list_settings_revisions(
                 conn, limit=limit, before_revision=before_revision
             )}
+        except (RevisionIntegrityError, ValueError):
+            raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+
+
+@router.get("/revisions/{revision}", dependencies=[Depends(require_viewer)])
+def revision_detail(revision: int):
+    if revision < 1:
+        raise HTTPException(status_code=422, detail="Revision must be positive")
+    with get_db() as conn:
+        try:
+            return {"revision": revision, "settings": _read_revision(conn, revision)}
+        except RevisionNotFound:
+            raise HTTPException(status_code=404, detail="Settings revision not found")
         except (RevisionIntegrityError, ValueError):
             raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
 

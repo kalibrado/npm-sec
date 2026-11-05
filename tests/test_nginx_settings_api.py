@@ -335,3 +335,34 @@ def test_admin_restore_api_auth_conflict_and_integrity(tmp_path, monkeypatch):
     assert client.post(url, json={**payload, "expected_revision": 3}, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 3
+
+
+def test_revision_detail_api_permissions_and_integrity(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+        create_settings_revision(conn, SETTINGS, expected_revision=0, author="admin", reason="initial")
+        create_settings_revision(conn, {**SETTINGS, "rate_limit_rps": 50}, expected_revision=1, author="admin", reason="change")
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    url = "/api/nginx-settings/revisions/1"
+    assert client.get(url).status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.json() == {"revision": 1, "settings": SETTINGS}
+    assert client.get("/api/nginx-settings/revisions/2").json()["settings"]["rate_limit_rps"] == 50
+    assert client.get("/api/nginx-settings/revisions/999").status_code == 404
+    assert client.get("/api/nginx-settings/revisions/0").status_code == 422
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1", ("0" * 64,))
+        conn.commit()
+    assert client.get(url).status_code == 409
