@@ -176,3 +176,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 
 - L'API standard `/api/nginx-settings/revisions` refuse désormais `expected_revision=0` (HTTP 409). L'initialisation passe obligatoirement par `/api/nginx-settings/import-initial` avec source identifiée, empreinte et attestation.
 - Test d'intégration HTTP complet : base vide → refus du contournement → import initial → édition admin → diff → historique → rejet du second import. Aucun appel de déploiement Nginx.
+
+## Générateur de preview rate-limit isolé (05/11/2026)
+
+- `services/nginx_rate_limit_preview.py` : rendu pur et déterministe de deux snippets distincts pour les contextes `http` (`limit_req_zone`) et `server` (`limit_req`, statut 429). Empreinte SHA-256 du rendu ; aucune écriture disque, commande, Docker ou reload.
+- Refus explicite des paramètres auto-ban, GeoIP, pays et proxys de confiance : ils ne peuvent pas être traduits sans intégrer correctement la chaîne IP réelle et les modules Nginx présents. Le rendu est **un prototype de prévisualisation**, pas un profil complet ni une politique active.
+- Les tests couvrent l'injection, la validation, les valeurs non prises en charge et la reproductibilité. Étapes ultérieures : test `nginx -t` sur serveur jetable, inventaire des modules, agent hôte isolé et procédure de rollback. Ne jamais appliquer automatiquement.
