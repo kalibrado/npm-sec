@@ -7,14 +7,15 @@ import subprocess
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import pytest
 
 from services.nginx_rate_limit_preview import render_rate_limit_preview
 
 
-def test_rate_limit_returns_429_under_burst(tmp_path: Path):
+@pytest.mark.parametrize("spoof_xff", [False, True])
+def test_rate_limit_returns_429_under_burst(tmp_path: Path, spoof_xff: bool):
     nginx = shutil.which("nginx")
     if nginx is None:
         pytest.skip("nginx unavailable; dedicated CI job installs it")
@@ -75,9 +76,12 @@ def test_rate_limit_returns_429_under_burst(tmp_path: Path):
                 time.sleep(0.05)
 
         statuses = []
-        for _ in range(12):
+        for index in range(12):
+            request = Request(url)
+            if spoof_xff:
+                request.add_header("X-Forwarded-For", f"198.51.100.{index + 1}")
             try:
-                with urlopen(url, timeout=2) as response:
+                with urlopen(request, timeout=2) as response:
                     statuses.append(response.status)
             except HTTPError as exc:
                 statuses.append(exc.code)
