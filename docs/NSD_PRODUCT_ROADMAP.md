@@ -182,3 +182,8 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - `services/nginx_rate_limit_preview.py` : rendu pur et déterministe de deux snippets distincts pour les contextes `http` (`limit_req_zone`) et `server` (`limit_req`, statut 429). Empreinte SHA-256 du rendu ; aucune écriture disque, commande, Docker ou reload.
 - Refus explicite des paramètres auto-ban, GeoIP, pays et proxys de confiance : ils ne peuvent pas être traduits sans intégrer correctement la chaîne IP réelle et les modules Nginx présents. Le rendu est **un prototype de prévisualisation**, pas un profil complet ni une politique active.
 - Les tests couvrent l'injection, la validation, les valeurs non prises en charge et la reproductibilité. Étapes ultérieures : test `nginx -t` sur serveur jetable, inventaire des modules, agent hôte isolé et procédure de rollback. Ne jamais appliquer automatiquement.
+
+## Validation Nginx jetable du rate limiting (05/11/2026)
+
+- Tests de syntaxe des deux snippets générés avec un `nginx -t` sur configuration temporaire isolée, sans démarrer Nginx et sans toucher aux fichiers NPM. Paramètres aux bornes et cas usuel.
+- Workflow CI dédié installant Nginx dans le runner GitHub pour garantir l'exécution réelle (pas de simple test Python). Aucun test GeoIP2, comportement HTTP ou application de profil à ce stade.
