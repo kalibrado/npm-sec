@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -43,7 +44,10 @@ app.include_router(widget.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return TEMPLATES.TemplateResponse(DASHBOARD_TEMPLATE, {"request": request})
+    return TEMPLATES.TemplateResponse(DASHBOARD_TEMPLATE, {
+        "request": request,
+        "carto_basemap_api_key": os.environ.get("CARTO_BASEMAP_API_KEY", "").strip(),
+    })
 
 
 @app.on_event("startup")
