@@ -88,3 +88,36 @@ def import_legacy_defaults(values: Any, *, source_sha256: str) -> dict[str, Any]
     if not isinstance(source_sha256, str) or len(source_sha256) != 64 or any(c not in "0123456789abcdef" for c in source_sha256):
         raise SettingsValidationError("source_sha256: expected lowercase SHA-256")
     return {"schema_version": SCHEMA_VERSION, "source_sha256": source_sha256, "settings": validate_settings(values)}
+
+
+# Public metadata for the draft editor. Defaults intentionally remain unset
+# until verified legacy http_top.conf/server_proxy.conf values are imported.
+_FIELD_METADATA = {
+    "auto_ban_enabled": ("boolean", "Activer les bans automatiques", "Désactivé tant que la politique n'est pas validée."),
+    "country_block_enabled": ("boolean", "Blocage par pays", "Active la politique de pays configurée."),
+    "blocked_countries": ("countries", "Pays bloqués", "Codes ISO 3166-1 alpha-2 majuscules, sans doublons."),
+    "trusted_proxy_cidrs": ("cidrs", "Proxys de confiance", "Réseaux CIDR canoniques autorisés pour real IP."),
+    "rate_limit_rps": ("integer", "Limite de requêtes par seconde", "Entier entre 1 et 100000."),
+    "rate_limit_burst": ("integer", "Rafale autorisée", "Entier entre 0 et 100000."),
+}
+
+
+def settings_schema_metadata() -> dict[str, Any]:
+    """Describe editable fields without fabricating historical defaults."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "legacy_defaults_imported": False,
+        "fields": {
+            key: {
+                "type": _FIELD_METADATA[key][0],
+                "label": _FIELD_METADATA[key][1],
+                "description": _FIELD_METADATA[key][2],
+                "required": True,
+                **({"min": 1, "max": 100000} if key == "rate_limit_rps" else {}),
+                **({"min": 0, "max": 100000} if key == "rate_limit_burst" else {}),
+                **({"max_items": MAX_RULES} if key == "blocked_countries" else {}),
+                **({"max_items": MAX_CIDRS} if key == "trusted_proxy_cidrs" else {}),
+            }
+            for key in _FIELDS
+        },
+    }
