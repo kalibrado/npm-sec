@@ -27,24 +27,26 @@ function harness() {
     return elements.get(id);
   }
   const requests = [];
+  let currentRevision = 2;
+  const setCurrentRevision = value => { currentRevision = value; };
   const document = {
     getElementById: element,
     createElement: tag => element('created-' + tag + '-' + Math.random()),
   };
   const fetch = (url, options = {}) => {
     if (url === '/api/nginx-settings/latest') return Promise.resolve(response({
-      draft: {revision: 2, settings},
+      draft: {revision: currentRevision, settings},
     }));
     if (url.startsWith('/api/nginx-settings/history')) return Promise.resolve(response({
       revisions: [
-        {revision: 2, author: 'admin', reason: 'new', created_at: 'today'},
+        {revision: currentRevision, author: 'admin', reason: 'new', created_at: 'today'},
         {revision: 1, author: 'admin', reason: 'old', created_at: 'yesterday'},
       ],
     }));
     return new Promise(resolve => requests.push({url, options, resolve}));
   };
   vm.runInNewContext(script, {document, fetch, window: {confirm: () => true}, console});
-  return {element, requests};
+  return {element, requests, setCurrentRevision};
 }
 
 test('stale comparison cannot enable restoration after selection changes', async () => {
@@ -77,9 +79,11 @@ test('restoration refreshes current revision and history', async () => {
   const payload = JSON.parse(h.requests[1].options.body);
   assert.equal(payload.target_revision, 1);
   assert.equal(payload.expected_revision, 2);
+  h.setCurrentRevision(3);
   h.requests[1].resolve(response({revision: 3}));
   await restoring;
-  assert.equal(h.element('typed-drafts-revision').textContent, 'Révision 2');
+  assert.equal(h.element('typed-drafts-revision').textContent, 'Révision 3');
+  assert.match(h.element('typed-drafts-history').children[0].textContent, /#3/);
   assert.equal(h.element('typed-drafts-restore-btn').disabled, true);
   assert.match(h.element('typed-drafts-restore-message').textContent, /nouveau brouillon/);
 });
