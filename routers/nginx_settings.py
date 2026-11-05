@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from auth_deps import require_admin, require_viewer
 from database import get_db
+from services.nginx_settings_schema import settings_schema_metadata
 from services.nginx_settings_diff import (
     RevisionIntegrityError, RevisionNotFound, compare_settings_revisions,
 )
@@ -18,6 +19,11 @@ from services.nginx_settings_revisions import (
 )
 
 router = APIRouter(prefix="/api/nginx-settings", tags=["nginx-settings"])
+
+
+@router.get("/schema", dependencies=[Depends(require_viewer)])
+def draft_schema():
+    return settings_schema_metadata()
 
 
 @router.get("/latest", dependencies=[Depends(require_viewer)])
