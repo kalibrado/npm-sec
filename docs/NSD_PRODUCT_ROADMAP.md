@@ -165,3 +165,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - **Attention** : l'API valide le format de l'empreinte et exige l'attestation de l'administrateur, mais ne peut pas vérifier que les valeurs reflètent réellement les fichiers Nginx : cette correspondance doit être contrôlée manuellement sur la source de confiance. L'empreinte ne prouve pas à elle seule la provenance.
 - Exemple de payload : `{"settings":{"auto_ban_enabled":false,"country_block_enabled":false,"blocked_countries":[],"trusted_proxy_cidrs":[],"rate_limit_rps":10,"rate_limit_burst":20},"source_sha256":"<SHA-256 réel du fichier vérifié>","source_description":"fichier historique vérifié","reason":"migration initiale","verified_against_source":true}`. Les valeurs de l'exemple ne doivent **jamais** être appliquées sans vérification.
 - Aucun rendu, déploiement, écriture de configuration ni reload Nginx. UI d'import guidé à prévoir après définition d'une source fiable.
+
+## Parcours UI d'import initial (05/11/2026)
+
+- La vue Config révèle le formulaire d'import uniquement si l'API indique qu'aucune révision initiale n'existe ; il disparaît après import réussi.
+- Champs de provenance et paramètres typés sans préremplissage : source décrite, SHA-256, valeurs explicitement relevées, motif, attestation cochée et confirmation finale. La saisie de booléens non cochés est une décision explicite de l'administrateur, pas une lecture automatique du fichier.
+- L'interface ne lit pas les fichiers Nginx : elle ne peut pas certifier la correspondance entre empreinte et valeurs. Contrôle manuel requis avant toute initialisation. Aucune modification NPM.
