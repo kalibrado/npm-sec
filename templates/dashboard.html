@@ -619,6 +619,23 @@
     <div class="list-subtitle">Révisions isolées : aucun fichier Nginx généré, aucune application automatique.</div>
   </div><span class="list-count" id="typed-drafts-revision">Non chargé</span></div>
   <div class="typed-drafts-body">
+    <section id="typed-import-section" hidden aria-labelledby="typed-import-title">
+      <h3 id="typed-import-title">Initialisation depuis une source vérifiée</h3>
+      <p>Renseigner uniquement des valeurs relevées dans une configuration Nginx de confiance. Aucune valeur n'est préremplie ou déduite.</p>
+      <form id="typed-import-form">
+        <label>Description de la source <input id="typed-import-source" maxlength="512" required placeholder="Chemin et version de la configuration vérifiée"></label>
+        <label>SHA-256 de la source <input id="typed-import-sha" minlength="64" maxlength="64" pattern="[0-9a-f]{64}" required autocomplete="off" placeholder="64 caractères hexadécimaux minuscules"></label>
+        <label><input type="checkbox" id="typed-import-auto-ban"> Auto-ban activé dans la source</label>
+        <label><input type="checkbox" id="typed-import-country-block"> Géoblocage activé dans la source</label>
+        <label>Pays bloqués (codes ISO séparés par des virgules) <textarea id="typed-import-countries" rows="2" placeholder="Codes observés dans la source"></textarea></label>
+        <label>Réseaux proxy de confiance (un CIDR par ligne) <textarea id="typed-import-proxies" rows="2" placeholder="CIDR observés dans la source"></textarea></label>
+        <label>Limite de requêtes par seconde <input id="typed-import-rps" type="number" min="1" max="100000" required></label>
+        <label>Burst <input id="typed-import-burst" type="number" min="0" max="100000" required></label>
+        <label>Motif de l'import <input id="typed-import-reason" maxlength="1024" required></label>
+        <label class="typed-import-attestation"><input id="typed-import-verified" type="checkbox" required> J'atteste avoir comparé tous ces paramètres avec la source identifiée ci-dessus.</label>
+        <button class="apply-btn compact" type="submit" id="typed-import-submit">Importer la révision initiale</button>
+      </form>
+    </section>
     <p id="typed-drafts-message" role="status" aria-live="polite"></p>
     <form id="typed-drafts-form">
       <label><input type="checkbox" id="typed-auto-ban"> Activer auto-ban (brouillon)</label>

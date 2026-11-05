@@ -32,3 +32,20 @@ def test_typed_draft_diff_uses_read_only_api_and_safe_dom():
     assert "cell.textContent = item" in script
     assert "innerHTML" not in script
     assert "Aucun changement appliqué" in script
+
+
+def test_initial_import_requires_source_attestation_and_confirmation():
+    html = (ROOT / "templates/dashboard.html").read_text()
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert 'id="typed-import-section" hidden' in html
+    assert 'id="typed-import-sha"' in html
+    assert 'pattern="[0-9a-f]{64}"' in html
+    assert 'id="typed-import-verified"' in html
+    assert 'id="typed-import-rps"' in html
+    assert 'id="typed-import-burst"' in html
+    assert "api/nginx-settings/import-initial" in script
+    assert "'X-NSD-Intent': 'import-settings'" in script
+    assert "verified_against_source: true" in script
+    assert "window.confirm(" in script
+    assert "el('typed-import-section').hidden = Boolean(latest.draft)" in script
+    assert "innerHTML" not in script
