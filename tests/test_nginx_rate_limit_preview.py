@@ -1,4 +1,6 @@
 """Read-only renderer regression tests."""
+import hashlib
+
 import pytest
 
 from services.nginx_rate_limit_preview import (
@@ -66,3 +68,16 @@ def test_preview_is_pure_and_does_not_touch_nginx_or_docker(settings, monkeypatc
     monkeypatch.setattr(subprocess, "run", forbidden)
     monkeypatch.setattr(Path, "write_text", forbidden)
     assert render_rate_limit_preview(settings).http_include
+
+
+def test_preview_digest_uses_binary_separator(settings):
+    preview = render_rate_limit_preview(settings)
+    expected = hashlib.sha256(
+        preview.http_include.encode("utf-8")
+        + bytes([0])
+        + preview.server_include.encode("utf-8")
+    ).hexdigest()
+    assert preview.sha256 == expected
+    assert preview.sha256 != hashlib.sha256(
+        (preview.http_include + r"\0" + preview.server_include).encode("utf-8")
+    ).hexdigest()
