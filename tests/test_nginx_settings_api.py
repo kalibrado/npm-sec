@@ -174,3 +174,21 @@ def test_admin_write_rejects_cross_origin_and_fetch_metadata(tmp_path, monkeypat
     )
     assert response.status_code == 201
     assert response.json()["draft"]["revision"] == 1
+
+
+def test_typed_schema_endpoint_is_authenticated_and_does_not_invent_defaults():
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    assert client.get("/api/nginx-settings/schema").status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    response = client.get("/api/nginx-settings/schema")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == 1
+    assert body["legacy_defaults_imported"] is False
+    assert set(body["fields"]) == set(SETTINGS)
+    assert body["fields"]["rate_limit_rps"]["min"] == 1
+    assert body["fields"]["rate_limit_burst"]["min"] == 0
+    assert body["fields"]["trusted_proxy_cidrs"]["max_items"] == 256
+    assert all("default" not in field for field in body["fields"].values())
