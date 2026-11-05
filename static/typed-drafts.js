@@ -11,6 +11,7 @@
   let revision = 0;
   let loaded = false;
   let busy = false;
+  let comparedTarget = null;
 
   function notice(value, error = false) {
     message.textContent = value;
@@ -20,6 +21,7 @@
     busy = value;
     save.disabled = value || !loaded;
     el('typed-drafts-reload').disabled = value;
+    el('typed-drafts-restore-btn').disabled = value || comparedTarget === null;
   }
   function parseLines(value, separator) {
     return value.split(separator).map(x => x.trim()).filter(Boolean);
@@ -63,6 +65,8 @@
     }
   }
   function updateCompareOptions(items) {
+    comparedTarget = null;
+    el('typed-drafts-restore-btn').disabled = true;
     const before = el('typed-drafts-before');
     const after = el('typed-drafts-after');
     for (const select of [before, after]) {
@@ -111,6 +115,8 @@
     container.appendChild(table);
   }
   async function compare() {
+    comparedTarget = null;
+    el('typed-drafts-restore-btn').disabled = true;
     const before = Number(el('typed-drafts-before').value);
     const after = Number(el('typed-drafts-after').value);
     const status = el('typed-drafts-diff-message');
@@ -126,11 +132,47 @@
       const result = await readJson(response);
       renderDiff(result.changes);
       status.textContent = `Comparaison #${before} → #${after}. Aucun changement appliqué.`;
+      if (after === revision && before !== revision) {
+        comparedTarget = {target: before, current: revision};
+        el('typed-drafts-restore-btn').disabled = false;
+      }
+      el('typed-drafts-restore-message').textContent = comparedTarget
+        ? `La révision #${before} peut être restaurée en nouveau brouillon après confirmation.`
+        : 'Pour restaurer, comparer une ancienne révision (Avant) avec la révision actuelle (Après).';
     } catch (error) {
       el('typed-drafts-diff-results').replaceChildren();
       status.textContent = `Comparaison impossible : ${error.message}`;
     } finally {
       button.disabled = false;
+    }
+  }
+  async function restoreDraft() {
+    const selected = comparedTarget;
+    if (busy || !selected || selected.current !== revision) return;
+    const reason = el('typed-drafts-restore-reason').value.trim();
+    const status = el('typed-drafts-restore-message');
+    if (!reason) { status.textContent = 'Motif de restauration obligatoire.'; return; }
+    if (!window.confirm(`Créer une nouvelle révision brouillon à partir de #${selected.target} ? Aucun déploiement Nginx ne sera effectué.`)) return;
+    setBusy(true);
+    try {
+      const response = await fetch('/api/nginx-settings/restore', {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'X-NSD-Intent': 'restore-settings'},
+        body: JSON.stringify({
+          target_revision: selected.target, expected_revision: selected.current, reason,
+        }),
+      });
+      await readJson(response);
+      el('typed-drafts-restore-reason').value = '';
+      comparedTarget = null;
+      await reload();
+      status.textContent = 'Ancienne version copiée dans un nouveau brouillon. Aucun déploiement Nginx.';
+    } catch (error) {
+      status.textContent = error.status === 409
+        ? 'Conflit de version ou intégrité : actualiser et comparer à nouveau.'
+        : `Restauration refusée : ${error.message}`;
+    } finally {
+      setBusy(false);
     }
   }
   async function readJson(response) {
@@ -245,6 +287,13 @@
   });
   el('typed-drafts-reload').addEventListener('click', reload);
   el('typed-drafts-compare-btn').addEventListener('click', compare);
+  el('typed-drafts-restore-btn').addEventListener('click', restoreDraft);
+  for (const id of ['typed-drafts-before', 'typed-drafts-after']) {
+    el(id).addEventListener('change', () => {
+      comparedTarget = null;
+      el('typed-drafts-restore-btn').disabled = true;
+    });
+  }
   form.hidden = true;
   reload();
 })();
