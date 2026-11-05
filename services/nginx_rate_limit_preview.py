@@ -48,5 +48,5 @@ def render_rate_limit_preview(settings: dict) -> RateLimitPreview:
         f"limit_req zone=nsd_preview_per_ip{burst_directive};\n"
         "limit_req_status 429;\n"
     )
-    digest = hashlib.sha256((http + "\\0" + server).encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(http.encode("utf-8") + b"\x00" + server.encode("utf-8")).hexdigest()
     return RateLimitPreview(http_include=http, server_include=server, sha256=digest)
