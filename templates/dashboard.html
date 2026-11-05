@@ -613,6 +613,31 @@
 <button class="page-btn" id="simulate-autoban">Simuler auto-ban</button>
 </div>
 <div class="lists-content config-content">
+<section class="list-card" id="typed-drafts-card" aria-labelledby="typed-drafts-title">
+  <div class="list-card-head"><div>
+    <div class="side-title" id="typed-drafts-title">Brouillons typés Nginx</div>
+    <div class="list-subtitle">Révisions isolées : aucun fichier Nginx généré, aucune application automatique.</div>
+  </div><span class="list-count" id="typed-drafts-revision">Non chargé</span></div>
+  <div class="typed-drafts-body">
+    <p id="typed-drafts-message" role="status" aria-live="polite"></p>
+    <form id="typed-drafts-form">
+      <label><input type="checkbox" id="typed-auto-ban"> Activer auto-ban (brouillon)</label>
+      <label><input type="checkbox" id="typed-country-block"> Activer géoblocage (brouillon)</label>
+      <label>Pays bloqués (codes ISO, séparés par des virgules)
+        <textarea id="typed-countries" rows="2" placeholder="FR, US"></textarea></label>
+      <label>Réseaux proxy de confiance (un CIDR par ligne)
+        <textarea id="typed-proxies" rows="2" placeholder="192.168.1.0/24"></textarea></label>
+      <label>Limite de requêtes / seconde <input id="typed-rps" type="number" min="1" max="100000" required></label>
+      <label>Burst <input id="typed-burst" type="number" min="0" max="100000" required></label>
+      <label>Motif de la révision <input id="typed-reason" maxlength="1024" required placeholder="Justification du changement"></label>
+      <div class="typed-drafts-actions">
+        <button class="page-btn" id="typed-drafts-reload" type="button">Actualiser</button>
+        <button class="apply-btn compact" id="typed-drafts-save" type="submit">Enregistrer le brouillon</button>
+      </div>
+    </form>
+    <details><summary>Historique des brouillons</summary><div id="typed-drafts-history"></div></details>
+  </div>
+</section>
 <section class="list-card nsd-profile-card" data-config-card="profile" aria-labelledby="nsd-profile-title">
   <div class="list-card-head">
     <div>
@@ -946,5 +971,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>window.NSD_CARTO_BASEMAP_KEY = {{ carto_basemap_api_key | tojson }};</script>
 <script src="/static/dashboard.js"></script>
+<script src="/static/typed-drafts.js" defer></script>
 </body>
 </html>
