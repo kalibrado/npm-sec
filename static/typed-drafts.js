@@ -34,6 +34,16 @@
       rate_limit_burst: Number(el('typed-burst').value),
     };
   }
+  function importValues() {
+    return {
+      auto_ban_enabled: el('typed-import-auto-ban').checked,
+      country_block_enabled: el('typed-import-country-block').checked,
+      blocked_countries: parseLines(el('typed-import-countries').value.toUpperCase(), ','),
+      trusted_proxy_cidrs: parseLines(el('typed-import-proxies').value, /\r?\n/),
+      rate_limit_rps: Number(el('typed-import-rps').value),
+      rate_limit_burst: Number(el('typed-import-burst').value),
+    };
+  }
   function populate(settings) {
     el('typed-auto-ban').checked = settings.auto_ban_enabled;
     el('typed-country-block').checked = settings.country_block_enabled;
@@ -146,6 +156,7 @@
       const history = await readJson(historyResponse);
       renderHistory(history.revisions || []);
       updateCompareOptions(history.revisions || []);
+      el('typed-import-section').hidden = Boolean(latest.draft);
       if (!latest.draft) {
         revision = 0;
         revisionLabel.textContent = 'Révision 0';
@@ -161,6 +172,7 @@
       }
     } catch (error) {
       form.hidden = true;
+      el('typed-import-section').hidden = true;
       notice(`Lecture impossible : ${error.message}`, true);
     } finally {
       setBusy(false);
@@ -188,6 +200,47 @@
         ? 'Conflit de révision ou intégrité : actualiser avant de réessayer.'
         : `Enregistrement refusé : ${error.message}`, true);
       setBusy(false);
+    }
+  });
+  el('typed-import-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const importForm = el('typed-import-form');
+    if (busy || !importForm.reportValidity()) return;
+    if (!el('typed-import-verified').checked) {
+      notice('Attestation de vérification obligatoire.', true);
+      return;
+    }
+    const source = el('typed-import-source').value.trim();
+    const reason = el('typed-import-reason').value.trim();
+    const sha = el('typed-import-sha').value.trim();
+    if (!source || !reason || !/^[0-9a-f]{64}$/.test(sha)) {
+      notice('Source, motif et empreinte SHA-256 valides obligatoires.', true);
+      return;
+    }
+    const settings = importValues();
+    if (!window.confirm('Confirmer que les valeurs saisies correspondent exactement à la source vérifiée ? Aucun changement Nginx ne sera appliqué.')) return;
+    setBusy(true);
+    el('typed-import-submit').disabled = true;
+    try {
+      const response = await fetch('/api/nginx-settings/import-initial', {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'X-NSD-Intent': 'import-settings'},
+        body: JSON.stringify({
+          settings, source_sha256: sha, source_description: source,
+          reason, verified_against_source: true,
+        }),
+      });
+      await readJson(response);
+      notice('Révision initiale importée. Aucun changement Nginx appliqué.');
+      setBusy(false);
+      await reload();
+    } catch (error) {
+      notice(error.status === 409
+        ? 'Import déjà effectué ou conflit : actualiser avant de réessayer.'
+        : `Import refusé : ${error.message}`, true);
+      setBusy(false);
+    } finally {
+      el('typed-import-submit').disabled = false;
     }
   });
   el('typed-drafts-reload').addEventListener('click', reload);
