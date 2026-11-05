@@ -76,3 +76,10 @@ def test_compare_discards_stale_http_results_after_selection_or_reload():
     assert 'Number(el("typed-drafts-after").value) !== after' in script
     assert "function updateCompareOptions(items) {\n    compareGeneration += 1;" in script
     assert "el(id).addEventListener('change', () => {\n      compareGeneration += 1;" in script
+
+
+def test_restore_releases_busy_lock_before_refreshing_history():
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    restore = script.split("async function restoreDraft()", 1)[1].split("async function readJson(", 1)[0]
+    assert "setBusy(false);\n      await reload();" in restore
+    assert "if (busy) return;" in script.split("async function reload()", 1)[1]
