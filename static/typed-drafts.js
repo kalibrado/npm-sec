@@ -12,6 +12,7 @@
   let loaded = false;
   let busy = false;
   let comparedTarget = null;
+  let compareGeneration = 0;
 
   function notice(value, error = false) {
     message.textContent = value;
@@ -65,6 +66,7 @@
     }
   }
   function updateCompareOptions(items) {
+    compareGeneration += 1;
     comparedTarget = null;
     el('typed-drafts-restore-btn').disabled = true;
     const before = el('typed-drafts-before');
@@ -115,6 +117,7 @@
     container.appendChild(table);
   }
   async function compare() {
+    const generation = ++compareGeneration;
     comparedTarget = null;
     el('typed-drafts-restore-btn').disabled = true;
     const before = Number(el('typed-drafts-before').value);
@@ -130,6 +133,9 @@
         {credentials: 'same-origin'},
       );
       const result = await readJson(response);
+      if (generation !== compareGeneration ||
+          Number(el("typed-drafts-before").value) !== before ||
+          Number(el("typed-drafts-after").value) !== after) return;
       renderDiff(result.changes);
       status.textContent = `Comparaison #${before} → #${after}. Aucun changement appliqué.`;
       if (after === revision && before !== revision) {
@@ -140,6 +146,7 @@
         ? `La révision #${before} peut être restaurée en nouveau brouillon après confirmation.`
         : 'Pour restaurer, comparer une ancienne révision (Avant) avec la révision actuelle (Après).';
     } catch (error) {
+      if (generation !== compareGeneration) return;
       el('typed-drafts-diff-results').replaceChildren();
       status.textContent = `Comparaison impossible : ${error.message}`;
     } finally {
@@ -290,6 +297,7 @@
   el('typed-drafts-restore-btn').addEventListener('click', restoreDraft);
   for (const id of ['typed-drafts-before', 'typed-drafts-after']) {
     el(id).addEventListener('change', () => {
+      compareGeneration += 1;
       comparedTarget = null;
       el('typed-drafts-restore-btn').disabled = true;
     });

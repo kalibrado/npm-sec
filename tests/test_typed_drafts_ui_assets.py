@@ -65,3 +65,14 @@ def test_restore_ui_requires_comparison_confirmation_and_revision_guard():
     assert "el('typed-drafts-restore-btn').disabled = true" in script
     assert "innerHTML" not in script
     assert "/api/nginx-settings/deploy" not in script
+
+
+def test_compare_discards_stale_http_results_after_selection_or_reload():
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert "let compareGeneration = 0;" in script
+    assert "const generation = ++compareGeneration;" in script
+    assert "generation !== compareGeneration" in script
+    assert 'Number(el("typed-drafts-before").value) !== before' in script
+    assert 'Number(el("typed-drafts-after").value) !== after' in script
+    assert "function updateCompareOptions(items) {\n    compareGeneration += 1;" in script
+    assert "el(id).addEventListener('change', () => {\n      compareGeneration += 1;" in script

@@ -221,3 +221,10 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Motif obligatoire, confirmation explicite, contrôle de concurrence côté API, retour utilisateur et rafraîchissement de l'historique.
 - L'opération crée une nouvelle révision DRAFT ; aucun déploiement, écriture Nginx ni reload.
 - Suite : tests navigateur interactifs, prévisualisation détaillée et protocole d'agent hôte isolé avant toute activation réelle.
+
+
+## Comparaisons UI : réponses HTTP obsolètes (05/11/2026)
+
+- Une génération de comparaison invalide les réponses arrivées après un changement de sélection ou un rechargement de l'historique.
+- La sélection « Avant / Après » est revérifiée après la réponse HTTP avant d'autoriser une restauration.
+- Tests de garde statiques ajoutés ; un test navigateur simulant des réponses hors ordre reste à réaliser.
