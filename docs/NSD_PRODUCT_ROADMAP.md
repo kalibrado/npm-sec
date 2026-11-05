@@ -144,3 +144,10 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Les écritures `POST /api/nginx-settings/revisions` refusent les en-têtes `Origin` non conformes à l'hôte HTTP et les requêtes navigateur `Sec-Fetch-Site` différentes de `same-origin` ou `none`. Le contrôle `X-NSD-Intent` et les droits admin restent obligatoires.
 - Tests : origines étrangères, `null`, hôtes trompeurs, contexte `same-site`/`cross-site`, aucune insertion en cas de refus et écriture same-origin autorisée.
 - Limites : ce contrôle est adapté aux navigateurs ; il ne constitue pas une authentification des clients non navigateurs. Le reverse proxy doit préserver `Host` et bloquer les en-têtes d'hôte non attendus. Aucun déploiement NPM.
+
+## Interface des brouillons typés (05/11/2026)
+
+- La vue Config affiche une section indépendante pour les six champs du schéma typé, le motif obligatoire, la révision courante et l'historique des 20 dernières révisions.
+- L'éditeur charge `/api/nginx-settings/latest`, écrit via `POST /api/nginx-settings/revisions` avec contrôle de version, et traite explicitement les conflits HTTP 409. Aucun rendu HTML non fiable ni appel d'application Nginx.
+- Sans révision initiale, l'éditeur est volontairement verrouillé : les valeurs historiques doivent être importées et validées plutôt que fabriquées par l'UI. La section de configuration runtime existante reste distincte.
+- Suite : import initial vérifié, comparaison détaillée et gestion UX des rôles. Aucun changement sur NPM.
