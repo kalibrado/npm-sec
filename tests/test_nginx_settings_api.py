@@ -101,6 +101,7 @@ def test_admin_write_requires_intent_and_enforces_revision(tmp_path, monkeypatch
     path = tmp_path / "settings.db"
     with sqlite3.connect(path) as conn:
         initialize_settings_revisions(conn)
+        create_settings_revision(conn, SETTINGS, expected_revision=0, author="importer", reason="verified initial", source_sha256="a" * 64)
 
     @contextlib.contextmanager
     def isolated_db():
@@ -112,7 +113,7 @@ def test_admin_write_requires_intent_and_enforces_revision(tmp_path, monkeypatch
     app.include_router(nginx_settings.router)
     client = TestClient(app)
     url = "/api/nginx-settings/revisions"
-    payload = {"settings": SETTINGS, "expected_revision": 0, "reason": "initial"}
+    payload = {"settings": SETTINGS, "expected_revision": 1, "reason": "update"}
 
     assert client.post(url, json=payload, headers={"X-NSD-Intent": "save-settings"}).status_code == 401
     app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
@@ -122,18 +123,19 @@ def test_admin_write_requires_intent_and_enforces_revision(tmp_path, monkeypatch
     headers = {"X-NSD-Intent": "save-settings"}
     response = client.post(url, json=payload, headers=headers)
     assert response.status_code == 201
-    assert response.json()["draft"]["revision"] == 1
+    assert response.json()["draft"]["revision"] == 2
     assert response.json()["draft"]["author"] == "writer"
     assert client.post(url, json=payload, headers=headers).status_code == 409
     assert client.post(url, json={**payload, "expected_revision": 1, "settings": {"bad": True}}, headers=headers).status_code == 422
     assert client.post(url, json={**payload, "expected_revision": -1}, headers=headers).status_code == 422
+    assert client.post(url, json={**payload, "expected_revision": 0}, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
-        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1", ("0" * 64,))
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
+        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=2", ("0" * 64,))
         conn.commit()
-    assert client.post(url, json={**payload, "expected_revision": 1}, headers=headers).status_code == 409
+    assert client.post(url, json={**payload, "expected_revision": 2}, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
 
 
 def test_admin_write_rejects_cross_origin_and_fetch_metadata(tmp_path, monkeypatch):
@@ -172,8 +174,8 @@ def test_admin_write_rejects_cross_origin_and_fetch_metadata(tmp_path, monkeypat
         url, json=payload,
         headers={**base, "Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
     )
-    assert response.status_code == 201
-    assert response.json()["draft"]["revision"] == 1
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Initial revision requires verified source import"
 
 
 def test_verified_initial_import_requires_admin_source_and_empty_history(tmp_path, monkeypatch):
@@ -221,3 +223,50 @@ def test_verified_initial_import_requires_admin_source_and_empty_history(tmp_pat
     assert client.post(url, json=payload, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
+
+
+def test_full_import_edit_diff_and_reimport_rejection(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    app.dependency_overrides[get_current_user] = lambda: {"username": "operator", "role": "admin"}
+    client = TestClient(app)
+    assert client.get("/api/nginx-settings/latest").json()["draft"] is None
+    assert client.post("/api/nginx-settings/revisions", json={
+        "settings": SETTINGS, "expected_revision": 0, "reason": "bypass",
+    }, headers={"X-NSD-Intent": "save-settings"}).status_code == 409
+
+    imported = client.post("/api/nginx-settings/import-initial", json={
+        "settings": SETTINGS, "source_sha256": "b" * 64,
+        "source_description": "manually verified snapshot",
+        "reason": "baseline", "verified_against_source": True,
+    }, headers={"X-NSD-Intent": "import-settings"})
+    assert imported.status_code == 201
+    assert imported.json()["draft"]["revision"] == 1
+    updated = {**SETTINGS, "rate_limit_rps": 15}
+    saved = client.post("/api/nginx-settings/revisions", json={
+        "settings": updated, "expected_revision": 1, "reason": "adjust rate",
+    }, headers={"X-NSD-Intent": "save-settings"})
+    assert saved.status_code == 201
+    assert saved.json()["draft"]["revision"] == 2
+    diff = client.get("/api/nginx-settings/diff?before_revision=1&after_revision=2")
+    assert diff.status_code == 200
+    assert diff.json()["changes"] == {"rate_limit_rps": {"before": 10, "after": 15}}
+    assert client.get("/api/nginx-settings/latest").json()["draft"]["settings"] == updated
+    assert len(client.get("/api/nginx-settings/history").json()["revisions"]) == 2
+    assert client.post("/api/nginx-settings/import-initial", json={
+        "settings": SETTINGS, "source_sha256": "b" * 64,
+        "source_description": "manually verified snapshot",
+        "reason": "again", "verified_against_source": True,
+    }, headers={"X-NSD-Intent": "import-settings"}).status_code == 409
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
