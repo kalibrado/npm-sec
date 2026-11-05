@@ -33,7 +33,7 @@ def test_rate_limit_preview_passes_real_nginx_syntax(tmp_path: Path, rate: int, 
         "events { worker_connections 16; }\n"
         "http {\n"
         "  include " + str(tmp_path / "http.conf") + ";\n"
-        "  server { listen 127.0.0.1:0;\n"
+        "  server { listen 127.0.0.1:18080;\n"
         "    include " + str(tmp_path / "server.conf") + ";\n"
         "    location / { return 200; }\n"
         "  }\n"
