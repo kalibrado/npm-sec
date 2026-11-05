@@ -131,3 +131,10 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Leaflet 2D utilise le format raster CARTO Voyager `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=...` ; le style vectoriel `style.json` nécessite MapLibre GL JS et ne peut pas être chargé comme couche raster Leaflet.
 - `CARTO_BASEMAP_API_KEY` est un **jeton navigateur public** injecté par le serveur via le template JSON échappé, jamais un secret serveur. Restreindre son usage au domaine du dashboard chez CARTO. Afficher un diagnostic si la clé manque ou si les tuiles échouent.
 - Limites : aucune clé fournie ni carte 3D intégrée ; la configuration depuis l'UI, MapLibre/vectoriel et le globe restent dans l'issue #49. Aucun impact NPM.
+
+## Incrément écriture API admin des brouillons (05/11/2026)
+
+- `POST /api/nginx-settings/revisions` : administrateur authentifié uniquement ; schéma strict, motif obligatoire, auteur issu de la session, concurrence optimiste et refus si la dernière révision est altérée.
+- En-tête obligatoire `X-NSD-Intent: save-settings` pour les écritures navigateur, non autorisé par la politique CORS cross-origin actuelle ; compléter par une protection CSRF explicite et des tests d'origine avant ouverture de l'UI d'édition.
+- Retour 201 pour brouillon créé, 403 sans rôle/intention, 409 en cas de conflit/corruption et 422 en cas de données invalides ; tests HTTP dédiés.
+- Aucun rendu ni déploiement Nginx ; les valeurs historiques ne sont pas encore importées automatiquement. L'UI de modification reste à connecter.
