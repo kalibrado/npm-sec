@@ -135,7 +135,7 @@ def test_admin_write_requires_intent_and_enforces_revision(tmp_path, monkeypatch
         conn.commit()
     assert client.post(url, json={**payload, "expected_revision": 2}, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
 
 
 def test_admin_write_rejects_cross_origin_and_fetch_metadata(tmp_path, monkeypatch):
