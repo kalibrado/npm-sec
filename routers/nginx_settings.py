@@ -17,6 +17,7 @@ from services.nginx_settings_history import list_settings_revisions
 from services.nginx_settings_schema import import_legacy_defaults
 from services.nginx_settings_revisions import (
     RevisionConflict, create_settings_revision, latest_settings_revision,
+    restore_settings_revision,
 )
 
 router = APIRouter(prefix="/api/nginx-settings", tags=["nginx-settings"])
@@ -149,3 +150,37 @@ def write_draft(
         raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
     except (ValueError, TypeError):
         raise HTTPException(status_code=422, detail="Invalid settings payload")
+
+
+class DraftRestoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_revision: int = Field(ge=1)
+    expected_revision: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=1024)
+
+
+@router.post("/restore", status_code=201)
+def restore_draft(
+    payload: DraftRestoreRequest,
+    request: Request,
+    admin: dict = Depends(require_admin),
+    x_nsd_intent: str | None = Header(default=None),
+):
+    _require_same_origin_write(request, x_nsd_intent, "restore-settings")
+    if not payload.reason.strip():
+        raise HTTPException(status_code=422, detail="Restore reason required")
+    try:
+        with get_db() as conn:
+            return {"draft": restore_settings_revision(
+                conn, target_revision=payload.target_revision,
+                expected_revision=payload.expected_revision,
+                author=admin["username"], reason=payload.reason.strip(),
+            )}
+    except RevisionNotFound:
+        raise HTTPException(status_code=404, detail="Settings revision not found")
+    except RevisionConflict:
+        raise HTTPException(status_code=409, detail="Settings revision conflict")
+    except RevisionIntegrityError:
+        raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid restore request")

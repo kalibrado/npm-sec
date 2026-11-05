@@ -289,3 +289,49 @@ def test_full_import_edit_diff_and_reimport_rejection(tmp_path, monkeypatch):
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
 
+
+
+def test_admin_restore_api_auth_conflict_and_integrity(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+        create_settings_revision(conn, SETTINGS, expected_revision=0, author="importer", reason="initial")
+        changed = {**SETTINGS, "rate_limit_rps": 25}
+        create_settings_revision(conn, changed, expected_revision=1, author="admin", reason="change")
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    url = "/api/nginx-settings/restore"
+    payload = {"target_revision": 1, "expected_revision": 2, "reason": "restore baseline"}
+    headers = {"X-NSD-Intent": "restore-settings"}
+
+    assert client.post(url, json=payload, headers=headers).status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    assert client.post(url, json=payload, headers=headers).status_code == 403
+    app.dependency_overrides[get_current_user] = lambda: {"username": "operator", "role": "admin"}
+    assert client.post(url, json=payload).status_code == 403
+    assert client.post(url, json=payload, headers={**headers, "Origin": "https://evil.example"}).status_code == 403
+    assert client.post(url, json={**payload, "target_revision": 0}, headers=headers).status_code == 422
+    assert client.post(url, json={**payload, "reason": "   "}, headers=headers).status_code == 422
+    assert client.post(url, json={**payload, "target_revision": 999}, headers=headers).status_code == 404
+    restored = client.post(url, json=payload, headers=headers)
+    assert restored.status_code == 201
+    assert restored.json()["draft"]["revision"] == 3
+    assert restored.json()["draft"]["settings"] == SETTINGS
+    assert restored.json()["draft"]["author"] == "operator"
+    assert restored.json()["draft"]["status"] == "DRAFT"
+    assert client.post(url, json=payload, headers=headers).status_code == 409
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 3
+        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1", ("0" * 64,))
+        conn.commit()
+    assert client.post(url, json={**payload, "expected_revision": 3}, headers=headers).status_code == 409
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 3
