@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from  config import ALLOWED_ORIGINS, validate_runtime_config
-from  routers import admin, auth, blocklist, health, logs, threats, control, security_profile, deployment
+from  routers import admin, auth, blocklist, health, logs, threats, control, security_profile, deployment, nginx_settings
 from  database import init_db
 from  routers import widget
 from  scheduler import start_background_tasks
@@ -35,6 +35,7 @@ app.include_router(threats.router)
 app.include_router(blocklist.router)
 app.include_router(control.router)
 app.include_router(security_profile.router)
+app.include_router(nginx_settings.router)
 app.include_router(deployment.router)
 app.include_router(admin.router)
 app.include_router(widget.router)
@@ -51,6 +52,10 @@ async def startup():
         raise RuntimeError(f"Template manquant: {TEMPLATES_DIR / DASHBOARD_TEMPLATE}")
     validate_runtime_config()
     init_db()
+    from database import get_db
+    from services.nginx_settings_revisions import initialize_settings_revisions
+    with get_db() as conn:
+        initialize_settings_revisions(conn)
     start_background_tasks()
 
 
