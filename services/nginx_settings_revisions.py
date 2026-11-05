@@ -43,10 +43,17 @@ def latest_settings_revision(conn: sqlite3.Connection) -> dict[str, Any] | None:
     """).fetchone()
     if row is None:
         return None
+    # Fail closed if the newest draft was altered, even when its hash was
+    # recomputed: callers must never receive unvalidated persisted settings.
+    from services.nginx_settings_diff import RevisionIntegrityError, _read_revision
+
+    settings = _read_revision(conn, row[0])
+    if row[7] != "DRAFT":
+        raise RevisionIntegrityError(f"revision {row[0]} has an invalid status")
     return {
         "revision": row[0], "created_at": row[1], "author": row[2],
         "reason": row[3], "source_sha256": row[4],
-        "settings": json.loads(row[5]), "settings_sha256": row[6],
+        "settings": settings, "settings_sha256": row[6],
         "status": row[7],
     }
 
