@@ -64,6 +64,8 @@ def validate_settings(settings: Any) -> dict[str, Any]:
             network = ip_network(cidr, strict=True)
         except ValueError as exc:
             raise SettingsValidationError("trusted_proxy_cidrs: invalid CIDR") from exc
+        if network.prefixlen == 0:
+            raise SettingsValidationError("trusted_proxy_cidrs: trusting all addresses is forbidden")
         if str(network) != cidr:
             raise SettingsValidationError("trusted_proxy_cidrs: noncanonical CIDR")
         normalized.append(str(network))
