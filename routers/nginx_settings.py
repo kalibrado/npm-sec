@@ -14,7 +14,6 @@ from services.nginx_settings_history import list_settings_revisions
 from services.nginx_settings_revisions import (
     RevisionConflict, create_settings_revision, latest_settings_revision,
 )
-from services.nginx_settings_schema import validate_settings
 
 router = APIRouter(prefix="/api/nginx-settings", tags=["nginx-settings"])
 
