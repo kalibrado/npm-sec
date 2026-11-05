@@ -172,6 +172,7 @@
       await readJson(response);
       el('typed-drafts-restore-reason').value = '';
       comparedTarget = null;
+      setBusy(false);
       await reload();
       status.textContent = 'Ancienne version copiée dans un nouveau brouillon. Aucun déploiement Nginx.';
     } catch (error) {
