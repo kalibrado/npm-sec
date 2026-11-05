@@ -5496,3 +5496,16 @@ body[data-view="config"] #panel-config [data-config-card="profile"] {
 #typed-drafts-diff-message { color: var(--muted); }
 #typed-drafts-diff-results { max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; }
 #typed-drafts-diff-results td { white-space: normal; min-width: 100px; }
+
+#typed-import-section:not([hidden]) { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--border2); border-radius: 8px; }
+#typed-import-section[hidden] { display: none; }
+#typed-import-section p { color: var(--muted); line-height: 1.5; }
+#typed-import-form { display: grid; gap: 12px; }
+#typed-import-form label { display: grid; gap: 5px; }
+#typed-import-form label:has(input[type="checkbox"]) { display: flex; align-items: flex-start; gap: 8px; }
+#typed-import-form textarea, #typed-import-form input:not([type="checkbox"]) {
+  width: 100%; min-width: 0; max-width: 100%; padding: 9px;
+  background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
+  border-radius: 6px; font: inherit;
+}
+.typed-import-attestation { padding: 10px; border: 1px solid var(--warning); border-radius: 6px; }
