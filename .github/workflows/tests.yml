@@ -17,6 +17,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Install Nginx for real configuration validation
         run: |
           sudo apt-get update -qq
@@ -32,6 +35,7 @@ jobs:
           LOG_FILE: /tmp/npm-sec-ci.log
         run: |
           python -m compileall -q .
+          node --test tests/typed_drafts_interactions.cjs
           node --check static/dashboard.js
           node --check static/sw.js
           python -m pytest -q
