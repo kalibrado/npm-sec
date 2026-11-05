@@ -89,3 +89,44 @@ def test_existing_tables_preserved(db, settings):
     initialize_settings_revisions(db)
     create_settings_revision(db, settings, expected_revision=0, author="admin", reason="draft")
     assert db.execute("SELECT id FROM existing_rules").fetchone()[0] == 7
+
+
+@pytest.mark.parametrize("corruption", ["hash", "schema", "canonical"])
+def test_corrupted_latest_blocks_new_draft(db, settings, corruption):
+    from services.nginx_settings_diff import RevisionIntegrityError
+
+    create_settings_revision(db, settings, expected_revision=0, author="admin", reason="initial")
+    if corruption == "hash":
+        db.execute(
+            "UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1",
+            ("0" * 64,),
+        )
+    elif corruption == "schema":
+        import hashlib
+        payload = '{"auto_ban_enabled":"not-a-boolean"}'
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        db.execute(
+            "UPDATE nginx_settings_revisions SET settings_json=?, settings_sha256=? WHERE revision=1",
+            (payload, digest),
+        )
+    else:
+        import hashlib
+        raw = db.execute(
+            "SELECT settings_json FROM nginx_settings_revisions WHERE revision=1"
+        ).fetchone()[0]
+        payload = raw.replace(',"', ', "')
+        assert payload != raw
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        db.execute(
+            "UPDATE nginx_settings_revisions SET settings_json=?, settings_sha256=? WHERE revision=1",
+            (payload, digest),
+        )
+    db.commit()
+
+    with pytest.raises(RevisionIntegrityError):
+        create_settings_revision(
+            db, settings, expected_revision=1, author="admin", reason="must reject"
+        )
+    assert db.execute(
+        "SELECT COUNT(*) FROM nginx_settings_revisions"
+    ).fetchone()[0] == 1

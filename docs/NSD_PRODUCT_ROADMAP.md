@@ -119,3 +119,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Route authentifiée en lecture `GET /api/nginx-settings/diff?before_revision=1&after_revision=2`, accessible aux rôles admin/viewer ; réutilise le comparateur SQLite existant, vérifie les empreintes et le schéma des deux révisions.
 - Contrats HTTP : 401 sans authentification, 422 pour identifiants manquants/invalides, 404 pour révision absente, 409 pour révision altérée. Tests HTTP de ces cas et des différences déterministes.
 - Limites : aucun endpoint d'écriture ni interface de comparaison, aucune migration des valeurs historiques, aucun effet sur NPM. Prochaine priorité : écriture admin et intégration UI.
+
+## Durcissement des écritures de brouillons (05/11/2026)
+
+- Avant toute insertion, `create_settings_revision` vérifie désormais, **dans la même transaction SQLite `BEGIN IMMEDIATE`**, l'intégrité SHA-256, le schéma typé et la forme canonique de la dernière révision. Une dernière révision altérée interdit l'écriture au lieu de masquer l'incident sous une nouvelle version valide.
+- Tests de régression pour hash incorrect, schéma invalide malgré hash recalculé, et JSON non canonique malgré hash recalculé ; aucune insertion en cas d'échec.
+- Limites : ne constitue ni une chaîne d'audit inviolable ni une protection contre la modification directe de SQLite. L'API POST admin, la protection CSRF, l'UI et l'import historique restent à développer. Aucun effet NPM.
