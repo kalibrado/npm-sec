@@ -2,7 +2,9 @@
 
 This router cannot render, publish or reload Nginx configurations.
 """
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from auth_deps import require_admin, require_viewer
@@ -65,6 +67,7 @@ class DraftWriteRequest(BaseModel):
 @router.post("/revisions", status_code=201)
 def write_draft(
     payload: DraftWriteRequest,
+    request: Request,
     admin: dict = Depends(require_admin),
     x_nsd_intent: str | None = Header(default=None),
 ):
@@ -72,6 +75,23 @@ def write_draft(
     # through CORS preflight. Do not allow this header in cross-origin CORS.
     if x_nsd_intent != "save-settings":
         raise HTTPException(status_code=403, detail="Missing write intent header")
+    # Explicit browser-origin and Fetch Metadata checks, in addition to the
+    # custom header. Never trust X-Forwarded-Host from an arbitrary client.
+    fetch_site = request.headers.get("sec-fetch-site", "").lower()
+    if fetch_site and fetch_site not in {"same-origin", "none"}:
+        raise HTTPException(status_code=403, detail="Cross-origin settings writes forbidden")
+    origin = request.headers.get("origin")
+    if origin is not None:
+        parsed = urlsplit(origin)
+        host = request.headers.get("host", "")
+        if (parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path not in {"", "/"}
+                or parsed.query or parsed.fragment
+                or parsed.netloc.lower() != host.lower()):
+            raise HTTPException(status_code=403, detail="Cross-origin settings writes forbidden")
     try:
         with get_db() as conn:
             return {"draft": create_settings_revision(
