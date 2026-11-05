@@ -47,3 +47,29 @@ def test_rate_limit_preview_passes_real_nginx_syntax(tmp_path: Path, rate: int, 
         capture_output=True, text=True, timeout=15, check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_isolated_nginx_check_rejects_invalid_directive(tmp_path: Path):
+    """Guard against false-positive syntax checks in the disposable fixture."""
+    nginx = shutil.which("nginx")
+    if nginx is None:
+        pytest.skip("nginx executable unavailable; dedicated CI job installs it")
+
+    config = tmp_path / "nginx.conf"
+    config.write_text(
+        "worker_processes 1;\n"
+        "pid " + str(tmp_path / "nginx.pid") + ";\n"
+        "error_log stderr notice;\n"
+        "events { worker_connections 16; }\n"
+        "http {\n"
+        "  access_log off;\n"
+        "  nsd_intentionally_invalid_directive on;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [nginx, "-t", "-p", str(tmp_path) + "/", "-c", str(config)],
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert result.returncode != 0
+    assert "nsd_intentionally_invalid_directive" in result.stderr
