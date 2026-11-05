@@ -33,6 +33,8 @@ def test_valid_settings_preserve_input(sample):
     ("blocked_countries", ["FR;deny all"]),
     ("trusted_proxy_cidrs", ["0.0.0.0/0;include /tmp/x"]),
     ("trusted_proxy_cidrs", ["192.168.1.1/24"]),
+    ("trusted_proxy_cidrs", ["0.0.0.0/0"]),
+    ("trusted_proxy_cidrs", ["::/0"]),
     ("trusted_proxy_cidrs", ["192.168.1.0/24", "192.168.1.0/24"]),
 ])
 def test_reject_invalid_field(sample, field, value):
@@ -56,3 +58,9 @@ def test_import_requires_verified_source_hash(sample):
     assert result["schema_version"] == 1
     assert result["source_sha256"] == "a" * 64
     assert result["settings"]["auto_ban_enabled"] is False
+
+
+def test_reject_universal_trusted_proxy_in_legacy_import(sample):
+    sample["trusted_proxy_cidrs"] = ["0.0.0.0/0"]
+    with pytest.raises(SettingsValidationError, match="trusting all addresses"):
+        import_legacy_defaults(sample, source_sha256="a" * 64)
