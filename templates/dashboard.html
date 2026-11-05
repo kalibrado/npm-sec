@@ -636,6 +636,16 @@
       </div>
     </form>
     <details><summary>Historique des brouillons</summary><div id="typed-drafts-history"></div></details>
+    <section id="typed-drafts-compare" aria-label="Comparer deux révisions">
+      <h3>Comparer les révisions</h3>
+      <div class="typed-drafts-actions">
+        <label>Avant <select id="typed-drafts-before"></select></label>
+        <label>Après <select id="typed-drafts-after"></select></label>
+        <button class="page-btn" type="button" id="typed-drafts-compare-btn">Comparer</button>
+      </div>
+      <div id="typed-drafts-diff-message" role="status" aria-live="polite"></div>
+      <div id="typed-drafts-diff-results"></div>
+    </section>
   </div>
 </section>
 <section class="list-card nsd-profile-card" data-config-card="profile" aria-labelledby="nsd-profile-title">

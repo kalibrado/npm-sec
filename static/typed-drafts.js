@@ -52,6 +52,77 @@
       node.appendChild(line);
     }
   }
+  function updateCompareOptions(items) {
+    const before = el('typed-drafts-before');
+    const after = el('typed-drafts-after');
+    for (const select of [before, after]) {
+      select.replaceChildren();
+      for (const item of items) {
+        const option = document.createElement('option');
+        option.value = String(item.revision);
+        option.textContent = `Révision #${item.revision}`;
+        select.appendChild(option);
+      }
+    }
+    if (items.length > 1) before.value = String(items[1].revision);
+    if (items.length) after.value = String(items[0].revision);
+    el('typed-drafts-compare-btn').disabled = items.length < 2;
+    el('typed-drafts-diff-results').replaceChildren();
+    el('typed-drafts-diff-message').textContent = items.length < 2
+      ? 'Deux révisions sont nécessaires pour comparer.'
+      : 'Sélectionner deux révisions puis cliquer sur Comparer.';
+  }
+  function renderDiff(changes) {
+    const container = el('typed-drafts-diff-results');
+    container.replaceChildren();
+    const entries = Object.entries(changes || {});
+    if (!entries.length) {
+      container.textContent = 'Aucune différence entre ces révisions.';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'compact-table';
+    const header = document.createElement('tr');
+    for (const name of ['Paramètre', 'Avant', 'Après']) {
+      const cell = document.createElement('th');
+      cell.textContent = name;
+      header.appendChild(cell);
+    }
+    table.appendChild(header);
+    for (const [key, value] of entries) {
+      const row = document.createElement('tr');
+      for (const item of [key, JSON.stringify(value.before), JSON.stringify(value.after)]) {
+        const cell = document.createElement('td');
+        cell.textContent = item;
+        row.appendChild(cell);
+      }
+      table.appendChild(row);
+    }
+    container.appendChild(table);
+  }
+  async function compare() {
+    const before = Number(el('typed-drafts-before').value);
+    const after = Number(el('typed-drafts-after').value);
+    const status = el('typed-drafts-diff-message');
+    if (!Number.isInteger(before) || !Number.isInteger(after) || before < 1 || after < 1) return;
+    const button = el('typed-drafts-compare-btn');
+    button.disabled = true;
+    status.textContent = 'Comparaison en cours…';
+    try {
+      const response = await fetch(
+        `/api/nginx-settings/diff?before_revision=${before}&after_revision=${after}`,
+        {credentials: 'same-origin'},
+      );
+      const result = await readJson(response);
+      renderDiff(result.changes);
+      status.textContent = `Comparaison #${before} → #${after}. Aucun changement appliqué.`;
+    } catch (error) {
+      el('typed-drafts-diff-results').replaceChildren();
+      status.textContent = `Comparaison impossible : ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  }
   async function readJson(response) {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -74,6 +145,7 @@
       const latest = await readJson(latestResponse);
       const history = await readJson(historyResponse);
       renderHistory(history.revisions || []);
+      updateCompareOptions(history.revisions || []);
       if (!latest.draft) {
         revision = 0;
         revisionLabel.textContent = 'Révision 0';
@@ -119,6 +191,7 @@
     }
   });
   el('typed-drafts-reload').addEventListener('click', reload);
+  el('typed-drafts-compare-btn').addEventListener('click', compare);
   form.hidden = true;
   reload();
 })();
