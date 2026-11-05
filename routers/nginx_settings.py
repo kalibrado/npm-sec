@@ -129,6 +129,8 @@ def write_draft(
     x_nsd_intent: str | None = Header(default=None),
 ):
     _require_same_origin_write(request, x_nsd_intent, "save-settings")
+    if payload.expected_revision == 0:
+        raise HTTPException(status_code=409, detail="Initial revision requires verified source import")
     try:
         with get_db() as conn:
             return {"draft": create_settings_revision(
