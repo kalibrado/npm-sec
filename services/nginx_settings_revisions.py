@@ -89,6 +89,10 @@ def create_settings_revision(
         ).fetchone()[0]
         if current != expected_revision:
             raise RevisionConflict(f"expected revision {expected_revision}, current {current}")
+        # Never bury a corrupted latest draft under a fresh valid revision.
+        # Keep the integrity check inside the writer transaction.
+        if current:
+            latest_settings_revision(conn)
         cursor = conn.execute("""
             INSERT INTO nginx_settings_revisions
             (created_at, author, reason, source_sha256, settings_json, settings_sha256)
