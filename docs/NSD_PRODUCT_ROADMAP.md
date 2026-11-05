@@ -187,3 +187,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 
 - Tests de syntaxe des deux snippets générés avec un `nginx -t` sur configuration temporaire isolée, sans démarrer Nginx et sans toucher aux fichiers NPM. Paramètres aux bornes et cas usuel.
 - Workflow CI dédié installant Nginx dans le runner GitHub pour garantir l'exécution réelle (pas de simple test Python). Aucun test GeoIP2, comportement HTTP ou application de profil à ce stade.
+
+## Contrôle négatif de la validation Nginx jetable (05/11/2026)
+
+- Le workflow de syntaxe vérifie également qu'une directive Nginx volontairement inconnue provoque un échec de `nginx -t` et que le diagnostic mentionne la directive rejetée.
+- Ce test évite de considérer une CI verte comme preuve de validation si le banc de test cessait de détecter les configurations invalides. Il n'exécute aucun daemon, reload ou accès à NPM.
+- Suite : valider le comportement HTTP dans un serveur jetable et construire l'agent d'application isolé, sans activation sur NPM réel.
