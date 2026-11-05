@@ -228,3 +228,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Une génération de comparaison invalide les réponses arrivées après un changement de sélection ou un rechargement de l'historique.
 - La sélection « Avant / Après » est revérifiée après la réponse HTTP avant d'autoriser une restauration.
 - Tests de garde statiques ajoutés ; un test navigateur simulant des réponses hors ordre reste à réaliser.
+
+
+## Rafraîchissement après restauration UI (05/11/2026)
+
+- Correction du verrou `busy` : après restauration réussie, la vue libère le verrou avant `reload()` afin de recharger réellement le dernier brouillon et l'historique.
+- Garde de régression statique ajoutée ; test navigateur complet à prévoir.
