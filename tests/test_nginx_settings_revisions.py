@@ -7,6 +7,7 @@ from services.nginx_settings_revisions import (
     create_settings_revision,
     initialize_settings_revisions,
     latest_settings_revision,
+    restore_settings_revision,
 )
 
 
@@ -130,3 +131,68 @@ def test_corrupted_latest_blocks_new_draft(db, settings, corruption):
     assert db.execute(
         "SELECT COUNT(*) FROM nginx_settings_revisions"
     ).fetchone()[0] == 1
+
+
+def test_restore_creates_new_draft_without_rewriting_history(db, settings):
+    first = create_settings_revision(
+        db, settings, expected_revision=0, author="admin", reason="initial",
+        source_sha256="a" * 64,
+    )
+    settings["rate_limit_rps"] = 42
+    create_settings_revision(
+        db, settings, expected_revision=1, author="admin", reason="change",
+    )
+    restored = restore_settings_revision(
+        db, target_revision=1, expected_revision=2,
+        author="operator", reason="restore earlier draft",
+    )
+    assert restored["revision"] == 3
+    assert restored["status"] == "DRAFT"
+    assert restored["settings"] == first["settings"]
+    assert restored["source_sha256"] is None
+    assert restored["author"] == "operator"
+    assert latest_settings_revision(db) == restored
+    assert db.execute(
+        "SELECT COUNT(*) FROM nginx_settings_revisions"
+    ).fetchone()[0] == 3
+
+
+def test_restore_rejects_stale_revision_and_missing_source(db, settings):
+    from services.nginx_settings_diff import RevisionNotFound
+
+    create_settings_revision(db, settings, expected_revision=0, author="admin", reason="initial")
+    with pytest.raises(RevisionConflict):
+        restore_settings_revision(
+            db, target_revision=1, expected_revision=0,
+            author="admin", reason="stale",
+        )
+    with pytest.raises(RevisionNotFound):
+        restore_settings_revision(
+            db, target_revision=99, expected_revision=1,
+            author="admin", reason="missing",
+        )
+    with pytest.raises(ValueError):
+        restore_settings_revision(
+            db, target_revision=True, expected_revision=1,
+            author="admin", reason="invalid",
+        )
+    assert latest_settings_revision(db)["revision"] == 1
+
+
+def test_restore_refuses_corrupted_historical_source(db, settings):
+    from services.nginx_settings_diff import RevisionIntegrityError
+
+    create_settings_revision(db, settings, expected_revision=0, author="admin", reason="initial")
+    settings["rate_limit_rps"] = 20
+    create_settings_revision(db, settings, expected_revision=1, author="admin", reason="new")
+    db.execute(
+        "UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1",
+        ("0" * 64,),
+    )
+    db.commit()
+    with pytest.raises(RevisionIntegrityError):
+        restore_settings_revision(
+            db, target_revision=1, expected_revision=2,
+            author="admin", reason="corrupted",
+        )
+    assert latest_settings_revision(db)["revision"] == 2
