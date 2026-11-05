@@ -42,6 +42,7 @@ def render_rate_limit_preview(settings: dict) -> RateLimitPreview:
         "# NSD preview only; include in http context after review.\n"
         f"limit_req_zone $binary_remote_addr zone=nsd_preview_per_ip:10m rate={rate}r/s;\n"
     )
+    burst_directive = f" burst={burst} nodelay" if burst else ""
     server = (
         "# NSD preview only; include in server context after review.\n"
         f"limit_req zone=nsd_preview_per_ip burst={burst} nodelay;\n"
