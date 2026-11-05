@@ -174,3 +174,50 @@ def test_admin_write_rejects_cross_origin_and_fetch_metadata(tmp_path, monkeypat
     )
     assert response.status_code == 201
     assert response.json()["draft"]["revision"] == 1
+
+
+def test_verified_initial_import_requires_admin_source_and_empty_history(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    url = "/api/nginx-settings/import-initial"
+    headers = {"X-NSD-Intent": "import-settings"}
+    payload = {
+        "settings": SETTINGS,
+        "source_sha256": "a" * 64,
+        "source_description": "verified local nginx snapshot",
+        "reason": "baseline migration",
+        "verified_against_source": True,
+    }
+    assert client.post(url, json=payload, headers=headers).status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    assert client.post(url, json=payload, headers=headers).status_code == 403
+    app.dependency_overrides[get_current_user] = lambda: {"username": "admin", "role": "admin"}
+    assert client.post(url, json=payload).status_code == 403
+    assert client.post(url, json=payload, headers={**headers, "Origin": "https://evil.example"}).status_code == 403
+    assert client.post(url, json={**payload, "verified_against_source": False}, headers=headers).status_code == 422
+    assert client.post(url, json={**payload, "source_sha256": "invalid"}, headers=headers).status_code == 422
+    assert client.post(url, json={**payload, "settings": {"unknown": 1}}, headers=headers).status_code == 422
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 0
+
+    response = client.post(url, json=payload, headers=headers)
+    assert response.status_code == 201
+    draft = response.json()["draft"]
+    assert draft["revision"] == 1
+    assert draft["author"] == "admin"
+    assert draft["source_sha256"] == "a" * 64
+    assert "verified local nginx snapshot" in draft["reason"]
+    assert client.post(url, json=payload, headers=headers).status_code == 409
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1

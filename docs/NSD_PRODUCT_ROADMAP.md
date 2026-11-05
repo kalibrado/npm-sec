@@ -157,3 +157,11 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - La section Config permet de sélectionner deux révisions et d'afficher les champs modifiés, valeurs avant/après, depuis l'API `/api/nginx-settings/diff` existante.
 - Les valeurs sont injectées en texte dans le DOM (pas de HTML non fiable), avec affichage responsive et erreurs visibles. Comparaison strictement en lecture seule, sans Nginx reload.
 - L'import initial vérifié reste nécessaire pour débloquer l'édition lorsqu'aucune révision n'existe.
+
+## Import initial attesté des brouillons (05/11/2026)
+
+- Endpoint admin `POST /api/nginx-settings/import-initial` : reçoit les six champs typés, une empreinte SHA-256 de la source historique, une description, un motif et une attestation explicite `verified_against_source=true`.
+- Refuse une source absente, un schéma invalide, une origine navigateur étrangère, un rôle non admin ou une base déjà initialisée. Insertion atomique avec `expected_revision=0` ; l'empreinte est conservée dans la révision.
+- **Attention** : l'API valide le format de l'empreinte et exige l'attestation de l'administrateur, mais ne peut pas vérifier que les valeurs reflètent réellement les fichiers Nginx : cette correspondance doit être contrôlée manuellement sur la source de confiance. L'empreinte ne prouve pas à elle seule la provenance.
+- Exemple de payload : `{"settings":{"auto_ban_enabled":false,"country_block_enabled":false,"blocked_countries":[],"trusted_proxy_cidrs":[],"rate_limit_rps":10,"rate_limit_burst":20},"source_sha256":"<SHA-256 réel du fichier vérifié>","source_description":"fichier historique vérifié","reason":"migration initiale","verified_against_source":true}`. Les valeurs de l'exemple ne doivent **jamais** être appliquées sans vérification.
+- Aucun rendu, déploiement, écriture de configuration ni reload Nginx. UI d'import guidé à prévoir après définition d'une source fiable.
