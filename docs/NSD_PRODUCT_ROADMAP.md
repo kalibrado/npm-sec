@@ -151,3 +151,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - L'éditeur charge `/api/nginx-settings/latest`, écrit via `POST /api/nginx-settings/revisions` avec contrôle de version, et traite explicitement les conflits HTTP 409. Aucun rendu HTML non fiable ni appel d'application Nginx.
 - Sans révision initiale, l'éditeur est volontairement verrouillé : les valeurs historiques doivent être importées et validées plutôt que fabriquées par l'UI. La section de configuration runtime existante reste distincte.
 - Suite : import initial vérifié, comparaison détaillée et gestion UX des rôles. Aucun changement sur NPM.
+
+## Comparaison des brouillons typés (05/11/2026)
+
+- La section Config permet de sélectionner deux révisions et d'afficher les champs modifiés, valeurs avant/après, depuis l'API `/api/nginx-settings/diff` existante.
+- Les valeurs sont injectées en texte dans le DOM (pas de HTML non fiable), avec affichage responsive et erreurs visibles. Comparaison strictement en lecture seule, sans Nginx reload.
+- L'import initial vérifié reste nécessaire pour débloquer l'édition lorsqu'aucune révision n'existe.
