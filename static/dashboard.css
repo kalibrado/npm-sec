@@ -5471,3 +5471,41 @@ body[data-view="config"] #panel-config [data-config-card="profile"] {
   line-height: 1.4;
   pointer-events: none;
 }
+
+/* Isolated typed-draft editor */
+.typed-drafts-body { padding: 14px; display: grid; gap: 12px; }
+#typed-drafts-message { color: var(--muted); line-height: 1.5; }
+#typed-drafts-message[data-error="true"] { color: var(--danger); }
+#typed-drafts-form { display: grid; gap: 12px; }
+#typed-drafts-form[hidden] { display: none; }
+#typed-drafts-form label { display: grid; gap: 6px; color: var(--text); }
+#typed-drafts-form label:has(input[type="checkbox"]) { display: flex; align-items: center; }
+#typed-drafts-form textarea, #typed-drafts-form input:not([type="checkbox"]) {
+  width: 100%; max-width: 100%; min-width: 0; padding: 9px;
+  background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
+  border-radius: 6px; font: inherit;
+}
+.typed-drafts-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#typed-drafts-history { display: grid; gap: 8px; padding: 10px 0; overflow-wrap: anywhere; }
+#typed-drafts-history p { padding: 7px; background: var(--surface2); border-radius: 5px; }
+
+#typed-drafts-compare { display: grid; gap: 10px; border-top: 1px solid var(--border); padding-top: 12px; }
+#typed-drafts-compare .typed-drafts-actions { align-items: end; }
+#typed-drafts-compare label { display: grid; gap: 5px; }
+#typed-drafts-compare select { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; padding: 7px; }
+#typed-drafts-diff-message { color: var(--muted); }
+#typed-drafts-diff-results { max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; }
+#typed-drafts-diff-results td { white-space: normal; min-width: 100px; }
+
+#typed-import-section:not([hidden]) { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--border2); border-radius: 8px; }
+#typed-import-section[hidden] { display: none; }
+#typed-import-section p { color: var(--muted); line-height: 1.5; }
+#typed-import-form { display: grid; gap: 12px; }
+#typed-import-form label { display: grid; gap: 5px; }
+#typed-import-form label:has(input[type="checkbox"]) { display: flex; align-items: flex-start; gap: 8px; }
+#typed-import-form textarea, #typed-import-form input:not([type="checkbox"]) {
+  width: 100%; min-width: 0; max-width: 100%; padding: 9px;
+  background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
+  border-radius: 6px; font: inherit;
+}
+.typed-import-attestation { padding: 10px; border: 1px solid var(--warning); border-radius: 6px; }

@@ -14,6 +14,7 @@ from services.nginx_settings_diff import (
     RevisionIntegrityError, RevisionNotFound, compare_settings_revisions,
 )
 from services.nginx_settings_history import list_settings_revisions
+from services.nginx_settings_schema import import_legacy_defaults
 from services.nginx_settings_revisions import (
     RevisionConflict, create_settings_revision, latest_settings_revision,
 )
@@ -63,26 +64,18 @@ def draft_diff(
             raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
 
 
-class DraftWriteRequest(BaseModel):
+class InitialImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     settings: dict
-    expected_revision: int = Field(ge=0)
+    source_sha256: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=1, max_length=1024)
+    source_description: str = Field(min_length=1, max_length=512)
+    verified_against_source: bool
 
 
-@router.post("/revisions", status_code=201)
-def write_draft(
-    payload: DraftWriteRequest,
-    request: Request,
-    admin: dict = Depends(require_admin),
-    x_nsd_intent: str | None = Header(default=None),
-):
-    # A required non-safelisted header forces cross-origin browser requests
-    # through CORS preflight. Do not allow this header in cross-origin CORS.
-    if x_nsd_intent != "save-settings":
+def _require_same_origin_write(request: Request, intent: str | None, expected_intent: str) -> None:
+    if intent != expected_intent:
         raise HTTPException(status_code=403, detail="Missing write intent header")
-    # Explicit browser-origin and Fetch Metadata checks, in addition to the
-    # custom header. Never trust X-Forwarded-Host from an arbitrary client.
     fetch_site = request.headers.get("sec-fetch-site", "").lower()
     if fetch_site and fetch_site not in {"same-origin", "none"}:
         raise HTTPException(status_code=403, detail="Cross-origin settings writes forbidden")
@@ -98,6 +91,52 @@ def write_draft(
                 or parsed.query or parsed.fragment
                 or parsed.netloc.lower() != host.lower()):
             raise HTTPException(status_code=403, detail="Cross-origin settings writes forbidden")
+
+
+@router.post("/import-initial", status_code=201)
+def import_initial_draft(
+    payload: InitialImportRequest,
+    request: Request,
+    admin: dict = Depends(require_admin),
+    x_nsd_intent: str | None = Header(default=None),
+):
+    _require_same_origin_write(request, x_nsd_intent, "import-settings")
+    if payload.verified_against_source is not True or not payload.source_description.strip():
+        raise HTTPException(status_code=422, detail="Explicit source verification required")
+    try:
+        imported = import_legacy_defaults(payload.settings, source_sha256=payload.source_sha256)
+        with get_db() as conn:
+            return {"draft": create_settings_revision(
+                conn, imported["settings"], expected_revision=0,
+                author=admin["username"],
+                reason=f"Initial import from {payload.source_description.strip()}: {payload.reason.strip()}",
+                source_sha256=imported["source_sha256"],
+            )}
+    except RevisionConflict:
+        raise HTTPException(status_code=409, detail="Initial revision already exists")
+    except RevisionIntegrityError:
+        raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid imported settings")
+
+
+class DraftWriteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    settings: dict
+    expected_revision: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=1024)
+
+
+@router.post("/revisions", status_code=201)
+def write_draft(
+    payload: DraftWriteRequest,
+    request: Request,
+    admin: dict = Depends(require_admin),
+    x_nsd_intent: str | None = Header(default=None),
+):
+    _require_same_origin_write(request, x_nsd_intent, "save-settings")
+    if payload.expected_revision == 0:
+        raise HTTPException(status_code=409, detail="Initial revision requires verified source import")
     try:
         with get_db() as conn:
             return {"draft": create_settings_revision(

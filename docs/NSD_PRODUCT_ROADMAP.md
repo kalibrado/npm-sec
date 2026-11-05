@@ -150,3 +150,51 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - `GET /api/nginx-settings/schema` (viewer ou admin authentifié) décrit les six champs typés, leurs libellés, bornes et contraintes, sans exposer de directives Nginx exécutables.
 - Aucun défaut historique n'est inventé : la migration vérifiée de `http_top.conf` et `server_proxy.conf` demeure nécessaire. La valeur `legacy_defaults_imported: false` décrit cette absence de provenance dans le schéma, pas un diagnostic du contenu de la base.
 - Prochain incrément : éditeur dédié branché sur `/schema`, `/latest`, `/revisions`, `/history` et `/diff` avec permissions admin côté serveur. Aucun reload.
+## Interface des brouillons typés (05/11/2026)
+
+- La vue Config affiche une section indépendante pour les six champs du schéma typé, le motif obligatoire, la révision courante et l'historique des 20 dernières révisions.
+- L'éditeur charge `/api/nginx-settings/latest`, écrit via `POST /api/nginx-settings/revisions` avec contrôle de version, et traite explicitement les conflits HTTP 409. Aucun rendu HTML non fiable ni appel d'application Nginx.
+- Sans révision initiale, l'éditeur est volontairement verrouillé : les valeurs historiques doivent être importées et validées plutôt que fabriquées par l'UI. La section de configuration runtime existante reste distincte.
+- Suite : import initial vérifié, comparaison détaillée et gestion UX des rôles. Aucun changement sur NPM.
+
+## Comparaison des brouillons typés (05/11/2026)
+
+- La section Config permet de sélectionner deux révisions et d'afficher les champs modifiés, valeurs avant/après, depuis l'API `/api/nginx-settings/diff` existante.
+- Les valeurs sont injectées en texte dans le DOM (pas de HTML non fiable), avec affichage responsive et erreurs visibles. Comparaison strictement en lecture seule, sans Nginx reload.
+- L'import initial vérifié reste nécessaire pour débloquer l'édition lorsqu'aucune révision n'existe.
+
+## Import initial attesté des brouillons (05/11/2026)
+
+- Endpoint admin `POST /api/nginx-settings/import-initial` : reçoit les six champs typés, une empreinte SHA-256 de la source historique, une description, un motif et une attestation explicite `verified_against_source=true`.
+- Refuse une source absente, un schéma invalide, une origine navigateur étrangère, un rôle non admin ou une base déjà initialisée. Insertion atomique avec `expected_revision=0` ; l'empreinte est conservée dans la révision.
+- **Attention** : l'API valide le format de l'empreinte et exige l'attestation de l'administrateur, mais ne peut pas vérifier que les valeurs reflètent réellement les fichiers Nginx : cette correspondance doit être contrôlée manuellement sur la source de confiance. L'empreinte ne prouve pas à elle seule la provenance.
+- Exemple de payload : `{"settings":{"auto_ban_enabled":false,"country_block_enabled":false,"blocked_countries":[],"trusted_proxy_cidrs":[],"rate_limit_rps":10,"rate_limit_burst":20},"source_sha256":"<SHA-256 réel du fichier vérifié>","source_description":"fichier historique vérifié","reason":"migration initiale","verified_against_source":true}`. Les valeurs de l'exemple ne doivent **jamais** être appliquées sans vérification.
+- Aucun rendu, déploiement, écriture de configuration ni reload Nginx. UI d'import guidé à prévoir après définition d'une source fiable.
+
+## Parcours UI d'import initial (05/11/2026)
+
+- La vue Config révèle le formulaire d'import uniquement si l'API indique qu'aucune révision initiale n'existe ; il disparaît après import réussi.
+- Champs de provenance et paramètres typés sans préremplissage : source décrite, SHA-256, valeurs explicitement relevées, motif, attestation cochée et confirmation finale. La saisie de booléens non cochés est une décision explicite de l'administrateur, pas une lecture automatique du fichier.
+- L'interface ne lit pas les fichiers Nginx : elle ne peut pas certifier la correspondance entre empreinte et valeurs. Contrôle manuel requis avant toute initialisation. Aucune modification NPM.
+
+## Verrouillage du bootstrap (05/11/2026)
+
+- L'API standard `/api/nginx-settings/revisions` refuse désormais `expected_revision=0` (HTTP 409). L'initialisation passe obligatoirement par `/api/nginx-settings/import-initial` avec source identifiée, empreinte et attestation.
+- Test d'intégration HTTP complet : base vide → refus du contournement → import initial → édition admin → diff → historique → rejet du second import. Aucun appel de déploiement Nginx.
+
+## Générateur de preview rate-limit isolé (05/11/2026)
+
+- `services/nginx_rate_limit_preview.py` : rendu pur et déterministe de deux snippets distincts pour les contextes `http` (`limit_req_zone`) et `server` (`limit_req`, statut 429). Empreinte SHA-256 du rendu ; aucune écriture disque, commande, Docker ou reload.
+- Refus explicite des paramètres auto-ban, GeoIP, pays et proxys de confiance : ils ne peuvent pas être traduits sans intégrer correctement la chaîne IP réelle et les modules Nginx présents. Le rendu est **un prototype de prévisualisation**, pas un profil complet ni une politique active.
+- Les tests couvrent l'injection, la validation, les valeurs non prises en charge et la reproductibilité. Étapes ultérieures : test `nginx -t` sur serveur jetable, inventaire des modules, agent hôte isolé et procédure de rollback. Ne jamais appliquer automatiquement.
+
+## Validation Nginx jetable du rate limiting (05/11/2026)
+
+- Tests de syntaxe des deux snippets générés avec un `nginx -t` sur configuration temporaire isolée, sans démarrer Nginx et sans toucher aux fichiers NPM. Paramètres aux bornes et cas usuel.
+- Workflow CI dédié installant Nginx dans le runner GitHub pour garantir l'exécution réelle (pas de simple test Python). Aucun test GeoIP2, comportement HTTP ou application de profil à ce stade.
+
+## Contrôle négatif de la validation Nginx jetable (05/11/2026)
+
+- Le workflow de syntaxe vérifie également qu'une directive Nginx volontairement inconnue provoque un échec de `nginx -t` et que le diagnostic mentionne la directive rejetée.
+- Ce test évite de considérer une CI verte comme preuve de validation si le banc de test cessait de détecter les configurations invalides. Il n'exécute aucun daemon, reload ou accès à NPM.
+- Suite : valider le comportement HTTP dans un serveur jetable et construire l'agent d'application isolé, sans activation sur NPM réel.

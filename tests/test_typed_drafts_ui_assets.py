@@ -1,0 +1,51 @@
+"""Static regression checks for the isolated Nginx typed draft editor."""
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_typed_drafts_ui_is_wired_to_config_panel():
+    html = (ROOT / "templates/dashboard.html").read_text()
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert 'id="typed-drafts-card"' in html
+    assert 'src="/static/typed-drafts.js"' in html
+    assert "api/nginx-settings/latest" in script
+    assert "api/nginx-settings/history?limit=20" in script
+    assert "api/nginx-settings/revisions" in script
+    assert "expected_revision: revision" in script
+    assert "'X-NSD-Intent': 'save-settings'" in script
+    assert "textContent" in script
+    assert "innerHTML" not in script
+    assert "form.hidden = true" in script
+    assert "Aucun déploiement Nginx effectué" in script
+    assert "/api/nginx-settings/deploy" not in script
+
+
+def test_typed_draft_diff_uses_read_only_api_and_safe_dom():
+    html = (ROOT / "templates/dashboard.html").read_text()
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert 'id="typed-drafts-before"' in html
+    assert 'id="typed-drafts-after"' in html
+    assert 'id="typed-drafts-diff-results"' in html
+    assert "/api/nginx-settings/diff?before_revision=" in script
+    assert "renderDiff(result.changes)" in script
+    assert "cell.textContent = item" in script
+    assert "innerHTML" not in script
+    assert "Aucun changement appliqué" in script
+
+
+def test_initial_import_requires_source_attestation_and_confirmation():
+    html = (ROOT / "templates/dashboard.html").read_text()
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert 'id="typed-import-section" hidden' in html
+    assert 'id="typed-import-sha"' in html
+    assert 'pattern="[0-9a-f]{64}"' in html
+    assert 'id="typed-import-verified"' in html
+    assert 'id="typed-import-rps"' in html
+    assert 'id="typed-import-burst"' in html
+    assert "api/nginx-settings/import-initial" in script
+    assert "'X-NSD-Intent': 'import-settings'" in script
+    assert "verified_against_source: true" in script
+    assert "window.confirm(" in script
+    assert "el('typed-import-section').hidden = Boolean(latest.draft)" in script
+    assert "innerHTML" not in script
