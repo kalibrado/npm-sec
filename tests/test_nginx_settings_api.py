@@ -57,3 +57,41 @@ def test_settings_read_endpoints_require_auth_and_validate_integrity(tmp_path, m
         conn.commit()
     assert client.get("/api/nginx-settings/latest").status_code == 409
     assert client.get("/api/nginx-settings/history").status_code == 409
+
+def test_revision_diff_api_permissions_and_corruption(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+        create_settings_revision(conn, SETTINGS, expected_revision=0, author="admin", reason="initial")
+        updated = {**SETTINGS, "rate_limit_rps": 12}
+        create_settings_revision(conn, updated, expected_revision=1, author="admin", reason="rate change")
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    endpoint = "/api/nginx-settings/diff?before_revision=1&after_revision=2"
+
+    assert client.get(endpoint).status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    response = client.get(endpoint)
+    assert response.status_code == 200
+    assert response.json() == {
+        "before_revision": 1,
+        "after_revision": 2,
+        "changes": {"rate_limit_rps": {"before": 10, "after": 12}},
+    }
+    assert client.get("/api/nginx-settings/diff?before_revision=2&after_revision=2").json()["changes"] == {}
+    assert client.get("/api/nginx-settings/diff?before_revision=0&after_revision=2").status_code == 422
+    assert client.get("/api/nginx-settings/diff?before_revision=1").status_code == 422
+    assert client.get("/api/nginx-settings/diff?before_revision=1&after_revision=999").status_code == 404
+
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=2", ("0" * 64,))
+        conn.commit()
+    assert client.get(endpoint).status_code == 409

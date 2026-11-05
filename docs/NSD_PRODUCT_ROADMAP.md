@@ -113,3 +113,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Routes `GET /api/nginx-settings/latest` et `GET /api/nginx-settings/history` : authentification obligatoire via `require_viewer` (admin ou viewer), vérification SHA-256 et schéma, pagination bornée, erreurs 409 si corruption. Les métadonnées d'historique ne contiennent pas le JSON des réglages.
 - Initialisation de la table des brouillons au démarrage après `init_db()`, sans écraser les tables existantes. Tests HTTP : 401 sans session, 200 viewer, validation des bornes, rejet des révisions altérées.
 - **Limites** : lecture uniquement, pas encore de POST admin, ni UI, ni import des fichiers historiques. Aucun déploiement ou reload Nginx. Prochaine étape : écriture admin authentifiée avec contrôle de concurrence et protection CSRF.
+
+## Incrément API de comparaison des brouillons (05/11/2026)
+
+- Route authentifiée en lecture `GET /api/nginx-settings/diff?before_revision=1&after_revision=2`, accessible aux rôles admin/viewer ; réutilise le comparateur SQLite existant, vérifie les empreintes et le schéma des deux révisions.
+- Contrats HTTP : 401 sans authentification, 422 pour identifiants manquants/invalides, 404 pour révision absente, 409 pour révision altérée. Tests HTTP de ces cas et des différences déterministes.
+- Limites : aucun endpoint d'écriture ni interface de comparaison, aucune migration des valeurs historiques, aucun effet sur NPM. Prochaine priorité : écriture admin et intégration UI.
