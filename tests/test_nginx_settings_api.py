@@ -215,6 +215,9 @@ def test_verified_initial_import_requires_admin_source_and_empty_history(tmp_pat
 
     response = client.post(url, json=payload, headers=headers)
     assert response.status_code == 201
+
+    assert response.json()["draft"]["revision"] == 1
+
     draft = response.json()["draft"]
     assert draft["revision"] == 1
     assert draft["author"] == "admin"
@@ -223,7 +226,22 @@ def test_verified_initial_import_requires_admin_source_and_empty_history(tmp_pat
     assert client.post(url, json=payload, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
-
+def test_typed_schema_endpoint_is_authenticated_and_does_not_invent_defaults():
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    assert client.get("/api/nginx-settings/schema").status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    response = client.get("/api/nginx-settings/schema")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == 1
+    assert body["legacy_defaults_imported"] is False
+    assert set(body["fields"]) == set(SETTINGS)
+    assert body["fields"]["rate_limit_rps"]["min"] == 1
+    assert body["fields"]["rate_limit_burst"]["min"] == 0
+    assert body["fields"]["trusted_proxy_cidrs"]["max_items"] == 256
+    assert all("default" not in field for field in body["fields"].values())
 
 def test_full_import_edit_diff_and_reimport_rejection(tmp_path, monkeypatch):
     path = tmp_path / "settings.db"
@@ -270,3 +288,4 @@ def test_full_import_edit_diff_and_reimport_rejection(tmp_path, monkeypatch):
     }, headers={"X-NSD-Intent": "import-settings"}).status_code == 409
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
+
