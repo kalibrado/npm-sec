@@ -134,3 +134,43 @@ def test_admin_write_requires_intent_and_enforces_revision(tmp_path, monkeypatch
     assert client.post(url, json={**payload, "expected_revision": 1}, headers=headers).status_code == 409
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
+
+
+def test_admin_write_rejects_cross_origin_and_fetch_metadata(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    app.dependency_overrides[get_current_user] = lambda: {"username": "writer", "role": "admin"}
+    client = TestClient(app)
+    url = "/api/nginx-settings/revisions"
+    payload = {"settings": SETTINGS, "expected_revision": 0, "reason": "safe"}
+    base = {"X-NSD-Intent": "save-settings"}
+    for headers in (
+        {"Origin": "https://attacker.example"},
+        {"Origin": "null"},
+        {"Origin": "https://testserver.attacker.example"},
+        {"Origin": "https://testserver@attacker.example"},
+        {"Sec-Fetch-Site": "cross-site"},
+        {"Sec-Fetch-Site": "same-site"},
+        {"Origin": "http://testserver", "Sec-Fetch-Site": "cross-site"},
+    ):
+        assert client.post(url, json=payload, headers={**base, **headers}).status_code == 403
+
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 0
+
+    response = client.post(
+        url, json=payload,
+        headers={**base, "Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
+    )
+    assert response.status_code == 201
+    assert response.json()["draft"]["revision"] == 1

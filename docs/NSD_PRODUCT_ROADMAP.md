@@ -138,3 +138,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - En-tête obligatoire `X-NSD-Intent: save-settings` pour les écritures navigateur, non autorisé par la politique CORS cross-origin actuelle ; compléter par une protection CSRF explicite et des tests d'origine avant ouverture de l'UI d'édition.
 - Retour 201 pour brouillon créé, 403 sans rôle/intention, 409 en cas de conflit/corruption et 422 en cas de données invalides ; tests HTTP dédiés.
 - Aucun rendu ni déploiement Nginx ; les valeurs historiques ne sont pas encore importées automatiquement. L'UI de modification reste à connecter.
+
+## Durcissement CSRF des brouillons (05/11/2026)
+
+- Les écritures `POST /api/nginx-settings/revisions` refusent les en-têtes `Origin` non conformes à l'hôte HTTP et les requêtes navigateur `Sec-Fetch-Site` différentes de `same-origin` ou `none`. Le contrôle `X-NSD-Intent` et les droits admin restent obligatoires.
+- Tests : origines étrangères, `null`, hôtes trompeurs, contexte `same-site`/`cross-site`, aucune insertion en cas de refus et écriture same-origin autorisée.
+- Limites : ce contrôle est adapté aux navigateurs ; il ne constitue pas une authentification des clients non navigateurs. Le reverse proxy doit préserver `Host` et bloquer les en-têtes d'hôte non attendus. Aucun déploiement NPM.
