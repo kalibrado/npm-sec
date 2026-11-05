@@ -83,3 +83,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Nouveau module `services/nginx_settings_schema.py` : validation stricte d'un premier sous-ensemble de six réglages (auto-ban, pays, CIDR proxies, rate/burst), types exacts, bornes et rejet des clés inconnues ; tests de régression dédiés.
 - Import initial exige un SHA-256 explicite des sources historiques. **Aucune valeur de `http_top.conf` ou `server_proxy.conf` n'est inventée ou importée automatiquement.**
 - Ce module n'est pas encore connecté à SQLite, à l'API ni à l'interface ; il ne génère aucune configuration et ne déclenche aucun reload. Étape suivante : extraction contrôlée des valeurs héritées, migration persistante et UI admin avec révisions/diff.
+
+## Incrément persistance des brouillons (05/11/2026)
+
+- `services/nginx_settings_revisions.py` : table SQLite dédiée aux révisions immuables de brouillons typés, hash SHA-256 canonique, auteur, motif, provenance optionnelle et concurrence optimiste transactionnelle (`BEGIN IMMEDIATE`).
+- Tests ciblés : révisions successives, conflit d'écriture, validation préalable, métadonnées et préservation des tables existantes.
+- **Limites** : module non raccordé à l'API ni à l'UI ; aucune migration automatique des fichiers historiques, aucun générateur, aucune preuve de déploiement. Les permissions admin doivent être vérifiées dans la future couche API. Statut exclusivement `DRAFT`, aucun reload NPM.
