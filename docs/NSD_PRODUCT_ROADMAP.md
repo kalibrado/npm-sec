@@ -144,3 +144,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Les écritures `POST /api/nginx-settings/revisions` refusent les en-têtes `Origin` non conformes à l'hôte HTTP et les requêtes navigateur `Sec-Fetch-Site` différentes de `same-origin` ou `none`. Le contrôle `X-NSD-Intent` et les droits admin restent obligatoires.
 - Tests : origines étrangères, `null`, hôtes trompeurs, contexte `same-site`/`cross-site`, aucune insertion en cas de refus et écriture same-origin autorisée.
 - Limites : ce contrôle est adapté aux navigateurs ; il ne constitue pas une authentification des clients non navigateurs. Le reverse proxy doit préserver `Host` et bloquer les en-têtes d'hôte non attendus. Aucun déploiement NPM.
+
+## Schéma HTTP pour éditeur de brouillons (05/11/2026)
+
+- `GET /api/nginx-settings/schema` (viewer ou admin authentifié) décrit les six champs typés, leurs libellés, bornes et contraintes, sans exposer de directives Nginx exécutables.
+- Aucun défaut historique n'est inventé : la migration vérifiée de `http_top.conf` et `server_proxy.conf` demeure nécessaire. La valeur `legacy_defaults_imported: false` décrit cette absence de provenance dans le schéma, pas un diagnostic du contenu de la base.
+- Prochain incrément : éditeur dédié branché sur `/schema`, `/latest`, `/revisions`, `/history` et `/diff` avec permissions admin côté serveur. Aucun reload.
