@@ -366,3 +366,43 @@ def test_revision_detail_api_permissions_and_integrity(tmp_path, monkeypatch):
         conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1", ("0" * 64,))
         conn.commit()
     assert client.get(url).status_code == 409
+
+
+def test_preview_latest_draft_is_read_only_and_authenticated(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    url = "/api/nginx-settings/preview"
+    assert client.get(url).status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    assert client.get(url).status_code == 404
+
+    with sqlite3.connect(path) as conn:
+        create_settings_revision(conn, SETTINGS, expected_revision=0, author="admin", reason="initial")
+    response = client.get(url)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["revision"] == 1
+    assert body["status"] == "PREVIEW_ONLY"
+    assert "limit_req_zone" in body["http_include"]
+    assert "limit_req_status 429" in body["server_include"]
+    assert len(body["sha256"]) == 64
+    assert client.get(url).json() == body
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 1
+        create_settings_revision(conn, {**SETTINGS, "trusted_proxy_cidrs": ["10.0.0.0/8"]}, expected_revision=1, author="admin", reason="proxy")
+    assert client.get(url).status_code == 422
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=2", ("0" * 64,))
+        conn.commit()
+    assert client.get(url).status_code == 409

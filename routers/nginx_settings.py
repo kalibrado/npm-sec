@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from auth_deps import require_admin, require_viewer
 from database import get_db
+from services.nginx_rate_limit_preview import render_rate_limit_preview, UnsupportedProfileError
 from services.nginx_settings_schema import settings_schema_metadata
 from services.nginx_settings_diff import (
     RevisionIntegrityError, RevisionNotFound, compare_settings_revisions, _read_revision,
@@ -35,6 +36,28 @@ def latest_draft():
             return {"draft": latest_settings_revision(conn)}
         except RevisionIntegrityError:
             raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+
+
+@router.get("/preview", dependencies=[Depends(require_viewer)])
+def preview_latest_draft():
+    """Read-only preview of the latest stored draft, never an applied policy."""
+    with get_db() as conn:
+        try:
+            draft = latest_settings_revision(conn)
+            if draft is None:
+                raise HTTPException(status_code=404, detail="No settings draft exists")
+            preview = render_rate_limit_preview(draft["settings"])
+            return {
+                "revision": draft["revision"],
+                "status": "PREVIEW_ONLY",
+                "http_include": preview.http_include,
+                "server_include": preview.server_include,
+                "sha256": preview.sha256,
+            }
+        except RevisionIntegrityError:
+            raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+        except UnsupportedProfileError:
+            raise HTTPException(status_code=422, detail="Draft contains settings unsupported by rate-limit preview")
 
 
 @router.get("/history", dependencies=[Depends(require_viewer)])

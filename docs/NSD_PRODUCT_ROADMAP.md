@@ -198,3 +198,11 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Le workflow de syntaxe vérifie également qu'une directive Nginx volontairement inconnue provoque un échec de `nginx -t` et que le diagnostic mentionne la directive rejetée.
 - Ce test évite de considérer une CI verte comme preuve de validation si le banc de test cessait de détecter les configurations invalides. Il n'exécute aucun daemon, reload ou accès à NPM.
 - Suite : valider le comportement HTTP dans un serveur jetable et construire l'agent d'application isolé, sans activation sur NPM réel.
+
+
+## API de prévisualisation des brouillons (05/11/2026)
+
+- `GET /api/nginx-settings/preview` expose, en lecture authentifiée, les deux snippets rate-limit du dernier brouillon validé, sa révision et son empreinte SHA-256.
+- Réponse explicite `PREVIEW_ONLY` ; aucun rendu sur disque, aucun déploiement ni reload. Les réglages non pris en charge (GeoIP, auto-ban, proxy de confiance) sont rejetés, sans application partielle silencieuse.
+- Tests HTTP : authentification, absence de brouillon, reproductibilité, paramètres non supportés, révision corrompue et absence de mutation.
+- Suite : parcours UI admin de comparaison/restauration, puis contrat de l'agent hôte isolé et validation de candidat sur Nginx jetable avant tout mécanisme de déploiement.
