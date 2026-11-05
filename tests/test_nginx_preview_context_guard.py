@@ -1,4 +1,4 @@
-"""Verify generated Nginx includes cannot be installed in the wrong context."""
+"""Check invalid placement and unresolved rate-limit zone in disposable Nginx."""
 from __future__ import annotations
 
 import shutil
@@ -10,8 +10,8 @@ import pytest
 from services.nginx_rate_limit_preview import render_rate_limit_preview
 
 
-@pytest.mark.parametrize("wrong_context", ["http_in_server", "server_in_http"])
-def test_rate_limit_preview_rejects_wrong_nginx_context(tmp_path: Path, wrong_context: str):
+@pytest.mark.parametrize("wrong_context", ["http_in_server", "server_without_zone"])
+def test_rate_limit_preview_rejects_invalid_placement_or_missing_zone(tmp_path: Path, wrong_context: str):
     nginx = shutil.which("nginx")
     if nginx is None:
         pytest.skip("nginx executable unavailable; dedicated CI job installs it")
@@ -31,7 +31,7 @@ def test_rate_limit_preview_rejects_wrong_nginx_context(tmp_path: Path, wrong_co
     else:
         http_directives = preview.server_include
         server_directives = ""
-        rejected_directive = "limit_req"
+        rejected_directive = "nsd_preview_per_ip"
 
     config = tmp_path / "nginx.conf"
     config.write_text(
