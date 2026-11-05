@@ -125,3 +125,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Avant toute insertion, `create_settings_revision` vérifie désormais, **dans la même transaction SQLite `BEGIN IMMEDIATE`**, l'intégrité SHA-256, le schéma typé et la forme canonique de la dernière révision. Une dernière révision altérée interdit l'écriture au lieu de masquer l'incident sous une nouvelle version valide.
 - Tests de régression pour hash incorrect, schéma invalide malgré hash recalculé, et JSON non canonique malgré hash recalculé ; aucune insertion en cas d'échec.
 - Limites : ne constitue ni une chaîne d'audit inviolable ni une protection contre la modification directe de SQLite. L'API POST admin, la protection CSRF, l'UI et l'import historique restent à développer. Aucun effet NPM.
+
+## Correctif fond de carte CARTO (05/11/2026)
+
+- Leaflet 2D utilise le format raster CARTO Voyager `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=...` ; le style vectoriel `style.json` nécessite MapLibre GL JS et ne peut pas être chargé comme couche raster Leaflet.
+- `CARTO_BASEMAP_API_KEY` est un **jeton navigateur public** injecté par le serveur via le template JSON échappé, jamais un secret serveur. Restreindre son usage au domaine du dashboard chez CARTO. Afficher un diagnostic si la clé manque ou si les tuiles échouent.
+- Limites : aucune clé fournie ni carte 3D intégrée ; la configuration depuis l'UI, MapLibre/vectoriel et le globe restent dans l'issue #49. Aucun impact NPM.
