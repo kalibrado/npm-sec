@@ -213,3 +213,11 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - API authentifiée `GET /api/nginx-settings/revisions/{revision}/preview` : rendu déterministe et sans effet de bord d'une révision historique dont l'empreinte et le schéma sont vérifiés.
 - Réponse marquée `PREVIEW_ONLY` avec empreinte du rendu ; erreurs explicites pour révision absente, corrompue ou paramètres non pris en charge.
 - Prochaine étape : interface de comparaison et restauration administrateur ; aucun agent hôte ni déploiement NPM activé.
+
+
+## Restauration de brouillon depuis l'interface (05/11/2026)
+
+- Le panneau Config propose une restauration de la révision « Avant » uniquement après comparaison réussie avec la révision courante « Après ».
+- Motif obligatoire, confirmation explicite, contrôle de concurrence côté API, retour utilisateur et rafraîchissement de l'historique.
+- L'opération crée une nouvelle révision DRAFT ; aucun déploiement, écriture Nginx ni reload.
+- Suite : tests navigateur interactifs, prévisualisation détaillée et protocole d'agent hôte isolé avant toute activation réelle.

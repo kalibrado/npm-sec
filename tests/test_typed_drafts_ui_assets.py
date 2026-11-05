@@ -49,3 +49,19 @@ def test_initial_import_requires_source_attestation_and_confirmation():
     assert "window.confirm(" in script
     assert "el('typed-import-section').hidden = Boolean(latest.draft)" in script
     assert "innerHTML" not in script
+
+
+def test_restore_ui_requires_comparison_confirmation_and_revision_guard():
+    html = (ROOT / "templates/dashboard.html").read_text()
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert 'id="typed-drafts-restore-btn" disabled' in html
+    assert 'id="typed-drafts-restore-reason"' in html
+    assert "comparedTarget = null" in script
+    assert "after === revision && before !== revision" in script
+    assert "selected.current !== revision" in script
+    assert "window.confirm(" in script
+    assert "'X-NSD-Intent': 'restore-settings'" in script
+    assert "target_revision: selected.target, expected_revision: selected.current, reason" in script
+    assert "el('typed-drafts-restore-btn').disabled = true" in script
+    assert "innerHTML" not in script
+    assert "/api/nginx-settings/deploy" not in script
