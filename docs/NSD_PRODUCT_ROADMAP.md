@@ -206,3 +206,10 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Réponse explicite `PREVIEW_ONLY` ; aucun rendu sur disque, aucun déploiement ni reload. Les réglages non pris en charge (GeoIP, auto-ban, proxy de confiance) sont rejetés, sans application partielle silencieuse.
 - Tests HTTP : authentification, absence de brouillon, reproductibilité, paramètres non supportés, révision corrompue et absence de mutation.
 - Suite : parcours UI admin de comparaison/restauration, puis contrat de l'agent hôte isolé et validation de candidat sur Nginx jetable avant tout mécanisme de déploiement.
+
+
+## Prévisualisation des révisions historiques (05/11/2026)
+
+- API authentifiée `GET /api/nginx-settings/revisions/{revision}/preview` : rendu déterministe et sans effet de bord d'une révision historique dont l'empreinte et le schéma sont vérifiés.
+- Réponse marquée `PREVIEW_ONLY` avec empreinte du rendu ; erreurs explicites pour révision absente, corrompue ou paramètres non pris en charge.
+- Prochaine étape : interface de comparaison et restauration administrateur ; aucun agent hôte ni déploiement NPM activé.

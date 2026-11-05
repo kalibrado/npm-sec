@@ -60,6 +60,30 @@ def preview_latest_draft():
             raise HTTPException(status_code=422, detail="Draft contains settings unsupported by rate-limit preview")
 
 
+@router.get("/revisions/{revision}/preview", dependencies=[Depends(require_viewer)])
+def preview_historical_draft(revision: int):
+    """Render an integrity-checked historical draft without applying it."""
+    if revision < 1:
+        raise HTTPException(status_code=422, detail="Revision must be positive")
+    with get_db() as conn:
+        try:
+            settings = _read_revision(conn, revision)
+            preview = render_rate_limit_preview(settings)
+            return {
+                "revision": revision,
+                "status": "PREVIEW_ONLY",
+                "http_include": preview.http_include,
+                "server_include": preview.server_include,
+                "sha256": preview.sha256,
+            }
+        except RevisionNotFound:
+            raise HTTPException(status_code=404, detail="Settings revision not found")
+        except (RevisionIntegrityError, ValueError):
+            raise HTTPException(status_code=409, detail="Stored settings revision failed integrity checks")
+        except UnsupportedProfileError:
+            raise HTTPException(status_code=422, detail="Draft contains settings unsupported by rate-limit preview")
+
+
 @router.get("/history", dependencies=[Depends(require_viewer)])
 def draft_history(
     limit: int = Query(default=50, ge=1, le=100),

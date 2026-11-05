@@ -406,3 +406,37 @@ def test_preview_latest_draft_is_read_only_and_authenticated(tmp_path, monkeypat
         conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=2", ("0" * 64,))
         conn.commit()
     assert client.get(url).status_code == 409
+
+
+def test_historical_preview_is_read_only_and_integrity_checked(tmp_path, monkeypatch):
+    path = tmp_path / "settings.db"
+    with sqlite3.connect(path) as conn:
+        initialize_settings_revisions(conn)
+        create_settings_revision(conn, SETTINGS, expected_revision=0, author="admin", reason="initial")
+        create_settings_revision(conn, {**SETTINGS, "rate_limit_rps": 20}, expected_revision=1, author="admin", reason="change")
+
+    @contextlib.contextmanager
+    def isolated_db():
+        with sqlite3.connect(path) as conn:
+            yield conn
+
+    monkeypatch.setattr(nginx_settings, "get_db", isolated_db)
+    app = FastAPI()
+    app.include_router(nginx_settings.router)
+    client = TestClient(app)
+    url = "/api/nginx-settings/revisions/1/preview"
+    assert client.get(url).status_code == 401
+    app.dependency_overrides[get_current_user] = lambda: {"username": "reader", "role": "viewer"}
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.json()["revision"] == 1
+    assert response.json()["status"] == "PREVIEW_ONLY"
+    assert response.json()["sha256"] == client.get(url).json()["sha256"]
+    assert response.json()["sha256"] != client.get("/api/nginx-settings/preview").json()["sha256"]
+    assert client.get("/api/nginx-settings/revisions/999/preview").status_code == 404
+    assert client.get("/api/nginx-settings/revisions/0/preview").status_code == 422
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM nginx_settings_revisions").fetchone()[0] == 2
+        conn.execute("UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1", ("0" * 64,))
+        conn.commit()
+    assert client.get(url).status_code == 409
