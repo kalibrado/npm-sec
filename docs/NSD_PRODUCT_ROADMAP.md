@@ -89,3 +89,9 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - `services/nginx_settings_revisions.py` : table SQLite dédiée aux révisions immuables de brouillons typés, hash SHA-256 canonique, auteur, motif, provenance optionnelle et concurrence optimiste transactionnelle (`BEGIN IMMEDIATE`).
 - Tests ciblés : révisions successives, conflit d'écriture, validation préalable, métadonnées et préservation des tables existantes.
 - **Limites** : module non raccordé à l'API ni à l'UI ; aucune migration automatique des fichiers historiques, aucun générateur, aucune preuve de déploiement. Les permissions admin doivent être vérifiées dans la future couche API. Statut exclusivement `DRAFT`, aucun reload NPM.
+
+## Incrément comparaison des révisions (05/11/2026)
+
+- `services/nginx_settings_diff.py` : comparaison déterministe, en lecture seule, de deux brouillons persistés ; vérification SHA-256 du JSON stocké, schéma validé et représentation canonique avant tout diff. Champs modifiés présentés avec valeurs avant/après.
+- Tests dédiés : diff avant/arrière, révision identique, identifiants invalides, absence de révision, altération de la base et charge utile non conforme même avec hash recalculé.
+- **Limites** : ce diff n'est pas encore raccordé à une API authentifiée ni à la web UI ; aucun statut `APPLIED`, aucune migration historique ni application Nginx. L'authentification et l'autorisation doivent être imposées dans la couche API à venir.
