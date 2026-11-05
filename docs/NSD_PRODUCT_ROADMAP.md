@@ -125,3 +125,10 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - Avant toute insertion, `create_settings_revision` vérifie désormais, **dans la même transaction SQLite `BEGIN IMMEDIATE`**, l'intégrité SHA-256, le schéma typé et la forme canonique de la dernière révision. Une dernière révision altérée interdit l'écriture au lieu de masquer l'incident sous une nouvelle version valide.
 - Tests de régression pour hash incorrect, schéma invalide malgré hash recalculé, et JSON non canonique malgré hash recalculé ; aucune insertion en cas d'échec.
 - Limites : ne constitue ni une chaîne d'audit inviolable ni une protection contre la modification directe de SQLite. L'API POST admin, la protection CSRF, l'UI et l'import historique restent à développer. Aucun effet NPM.
+
+## Incrément écriture API admin des brouillons (05/11/2026)
+
+- `POST /api/nginx-settings/revisions` : administrateur authentifié uniquement ; schéma strict, motif obligatoire, auteur issu de la session, concurrence optimiste et refus si la dernière révision est altérée.
+- En-tête obligatoire `X-NSD-Intent: save-settings` pour les écritures navigateur, non autorisé par la politique CORS cross-origin actuelle ; compléter par une protection CSRF explicite et des tests d'origine avant ouverture de l'UI d'édition.
+- Retour 201 pour brouillon créé, 403 sans rôle/intention, 409 en cas de conflit/corruption et 422 en cas de données invalides ; tests HTTP dédiés.
+- Aucun rendu ni déploiement Nginx ; les valeurs historiques ne sont pas encore importées automatiquement. L'UI de modification reste à connecter.
