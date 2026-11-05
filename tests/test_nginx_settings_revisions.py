@@ -91,7 +91,7 @@ def test_existing_tables_preserved(db, settings):
     assert db.execute("SELECT id FROM existing_rules").fetchone()[0] == 7
 
 
-@pytest.mark.parametrize("corruption", ["hash", "status", "canonical"])
+@pytest.mark.parametrize("corruption", ["hash", "schema", "canonical"])
 def test_corrupted_latest_blocks_new_draft(db, settings, corruption):
     from services.nginx_settings_diff import RevisionIntegrityError
 
@@ -101,9 +101,7 @@ def test_corrupted_latest_blocks_new_draft(db, settings, corruption):
             "UPDATE nginx_settings_revisions SET settings_sha256=? WHERE revision=1",
             ("0" * 64,),
         )
-    elif corruption == "status":
-        # SQLite CHECK prevents a non-DRAFT status; corrupt the JSON while
-        # retaining a valid status to exercise fail-closed schema validation.
+    elif corruption == "schema":
         import hashlib
         payload = '{"auto_ban_enabled":"not-a-boolean"}'
         digest = hashlib.sha256(payload.encode()).hexdigest()
