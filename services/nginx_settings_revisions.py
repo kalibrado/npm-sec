@@ -109,3 +109,25 @@ def create_settings_revision(
     result = latest_settings_revision(conn)
     assert result is not None and result["revision"] == revision
     return result
+
+
+def restore_settings_revision(
+    conn: sqlite3.Connection, *, target_revision: int, expected_revision: int,
+    author: str, reason: str,
+) -> dict[str, Any]:
+    """Copy a verified historical draft into a new immutable DRAFT revision.
+
+    This is a draft restoration, not an Nginx deployment or applied rollback.
+    The caller must enforce admin authorization before invoking this function.
+    """
+    if type(target_revision) is not int or target_revision < 1:
+        raise ValueError("target_revision must be a positive integer")
+    from services.nginx_settings_diff import _read_revision
+
+    # Validate the source before delegating the concurrency-controlled write.
+    # A concurrent SQLite writer cannot alter historical immutable revisions.
+    settings = _read_revision(conn, target_revision)
+    return create_settings_revision(
+        conn, settings, expected_revision=expected_revision,
+        author=author, reason=reason,
+    )
