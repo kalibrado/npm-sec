@@ -19,3 +19,16 @@ def test_typed_drafts_ui_is_wired_to_config_panel():
     assert "form.hidden = true" in script
     assert "Aucun déploiement Nginx effectué" in script
     assert "/api/nginx-settings/deploy" not in script
+
+
+def test_typed_draft_diff_uses_read_only_api_and_safe_dom():
+    html = (ROOT / "templates/dashboard.html").read_text()
+    script = (ROOT / "static/typed-drafts.js").read_text()
+    assert 'id="typed-drafts-before"' in html
+    assert 'id="typed-drafts-after"' in html
+    assert 'id="typed-drafts-diff-results"' in html
+    assert "/api/nginx-settings/diff?before_revision=" in script
+    assert "renderDiff(result.changes)" in script
+    assert "cell.textContent = item" in script
+    assert "innerHTML" not in script
+    assert "Aucun changement appliqué" in script
