@@ -150,7 +150,7 @@
       el('typed-drafts-diff-results').replaceChildren();
       status.textContent = `Comparaison impossible : ${error.message}`;
     } finally {
-      button.disabled = false;
+      if (generation === compareGeneration) button.disabled = false;
     }
   }
   async function restoreDraft() {
