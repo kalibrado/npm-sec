@@ -171,3 +171,8 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 - La vue Config révèle le formulaire d'import uniquement si l'API indique qu'aucune révision initiale n'existe ; il disparaît après import réussi.
 - Champs de provenance et paramètres typés sans préremplissage : source décrite, SHA-256, valeurs explicitement relevées, motif, attestation cochée et confirmation finale. La saisie de booléens non cochés est une décision explicite de l'administrateur, pas une lecture automatique du fichier.
 - L'interface ne lit pas les fichiers Nginx : elle ne peut pas certifier la correspondance entre empreinte et valeurs. Contrôle manuel requis avant toute initialisation. Aucune modification NPM.
+
+## Verrouillage du bootstrap (05/11/2026)
+
+- L'API standard `/api/nginx-settings/revisions` refuse désormais `expected_revision=0` (HTTP 409). L'initialisation passe obligatoirement par `/api/nginx-settings/import-initial` avec source identifiée, empreinte et attestation.
+- Test d'intégration HTTP complet : base vide → refus du contournement → import initial → édition admin → diff → historique → rejet du second import. Aucun appel de déploiement Nginx.
