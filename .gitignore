@@ -10,3 +10,8 @@ data/
 reports/
 *.log
 .DS_Store
+
+frontend/node_modules/
+frontend/dist/
+static/react-app/
+frontend/*.tsbuildinfo
