@@ -49,6 +49,7 @@ def test_schema_reports_import_provenance_and_detects_corruption(tmp_path, monke
 
     with sqlite3.connect(path) as conn:
         conn.execute("DELETE FROM nginx_settings_revisions")
+        conn.execute("DELETE FROM sqlite_sequence WHERE name='nginx_settings_revisions'")
         conn.commit()
         create_settings_revision(
             conn, SETTINGS, expected_revision=0, author="admin",
