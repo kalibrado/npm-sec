@@ -26,7 +26,23 @@ router = APIRouter(prefix="/api/nginx-settings", tags=["nginx-settings"])
 
 @router.get("/schema", dependencies=[Depends(require_viewer)])
 def draft_schema():
-    return settings_schema_metadata()
+    metadata = settings_schema_metadata()
+    with get_db() as conn:
+        try:
+            latest = latest_settings_revision(conn)
+            if latest is not None:
+                # A regular draft is not proof of verified legacy import.
+                first = conn.execute(
+                    "SELECT revision, source_sha256 FROM nginx_settings_revisions "
+                    "ORDER BY revision ASC LIMIT 1"
+                ).fetchone()
+                _read_revision(conn, first[0])
+                metadata["legacy_defaults_imported"] = bool(first[1])
+        except RevisionIntegrityError:
+            raise HTTPException(
+                status_code=409, detail="Stored settings revision failed integrity checks"
+            )
+    return metadata
 
 
 @router.get("/latest", dependencies=[Depends(require_viewer)])
