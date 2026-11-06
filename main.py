@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -48,6 +48,15 @@ async def dashboard(request: Request):
         "request": request,
         "carto_basemap_api_key": os.environ.get("CARTO_BASEMAP_API_KEY", "").strip(),
     })
+
+
+@app.get("/app", include_in_schema=False)
+async def react_dashboard():
+    index = STATIC_DIR / "react-app" / "index.html"
+    if not index.is_file():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Interface React non compilée. Exécuter npm run build dans frontend/.")
+    return FileResponse(index, media_type="text/html", headers={"Cache-Control": "no-store"})
 
 
 @app.on_event("startup")
