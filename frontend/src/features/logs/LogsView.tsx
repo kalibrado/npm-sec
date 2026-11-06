@@ -13,6 +13,7 @@ export function LogsView() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
+  const [live, setLive] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams({ limit: "50", search });
@@ -27,6 +28,11 @@ export function LogsView() {
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [search, mode, cursor, page]);
+  useEffect(() => {
+    if (!live || cursor !== null) return;
+    const timer = window.setInterval(() => setPage(p => p + 1), 5000);
+    return () => window.clearInterval(timer);
+  }, [live, cursor]);
   const reset = () => { setCursor(null); setNext(null); setRows([]); setPage(p => p + 1); };
   return <section aria-label="Investigation des logs">
     <form className="log-filters" onSubmit={event => { event.preventDefault(); setSearch(query.trim()); reset(); }}>
@@ -36,7 +42,9 @@ export function LogsView() {
       </select></label>
       <button type="submit">Rechercher</button>
       <button type="button" onClick={reset}>Actualiser</button>
+      <label><input type="checkbox" checked={live} onChange={e => { setLive(e.target.checked); reset(); }}/> Suivi automatique (5 s)</label>
     </form>
+    {live && cursor !== null && <p className="hint">Suivi automatique suspendu pendant la pagination.</p>}
     <p className="hint" role="status">{loading ? "Chargement…" : `${total.toLocaleString("fr-FR")} événements correspondent aux filtres`}</p>
     {error && <p role="alert">{error}</p>}
     <div className="table-scroll"><table><thead><tr><th>Date</th><th>IP</th><th>Host</th><th>Méthode</th><th>URI</th><th>HTTP</th><th>Décision</th></tr></thead>
