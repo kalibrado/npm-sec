@@ -96,7 +96,7 @@ def test_sse_reads_already_ingested_rows(sample):
 
 def test_existing_database_without_cursor_replays_missing_rows(sample):
     existing = json.loads(line("203.0.113.1"))
-    sample.write_text(json.dumps(existing) + "\\n" + line("203.0.113.9"))
+    sample.write_text(json.dumps(existing) + "\n" + line("203.0.113.9"))
     with database.get_db() as conn:
         conn.execute(
             """INSERT INTO access_logs (timestamp, ip, uri, status)
@@ -114,7 +114,7 @@ def test_existing_database_without_cursor_replays_missing_rows(sample):
 
 def test_cursorless_legacy_same_signature_reconciles_one_row_each(sample):
     existing = json.loads(line("203.0.113.1"))
-    raw = json.dumps(existing) + "\\n"
+    raw = json.dumps(existing) + "\n"
     sample.write_text(raw * 2 + line("203.0.113.10"))
     with database.get_db() as conn:
         for _ in range(2):
