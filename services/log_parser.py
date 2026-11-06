@@ -48,7 +48,7 @@ def parse_line(line: str) -> dict | None:
             "user_agent": data.get("http_user_agent", ""),
             "isp": data.get("isp", "-"),
             "asn": str(data.get("asn", "")),
-            "uri": data.get("uri", data.get("request_uri", "")),
+            "uri": data.get("uri") or data.get("request_uri") or "",
             "status": int(data.get("status", 0)),
             "blocked": 1 if data.get("allowed", "yes") == "no" else 0,
             "policy_mode": policy_mode,
