@@ -37,7 +37,7 @@ def parse_line(line: str) -> dict | None:
         # if is_internal_ip(ip):
         #     return None
         return {
-            "timestamp": data.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            "timestamp": data.get("timestamp") or data.get("time_iso8601") or datetime.now(timezone.utc).isoformat(),
             "ip": ip,
             "country_code": data.get("country_code", "XX"),
             "country_name": data.get("country_name", "Inconnu"),
