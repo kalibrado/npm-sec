@@ -94,22 +94,38 @@ def test_sse_reads_already_ingested_rows(sample):
     assert "203.0.113.44" in message
 
 
-def test_existing_database_without_cursor_starts_at_eof(sample):
-    sample.write_text(line("203.0.113.1"))
-    # Legacy installation: historical logs without a persisted file cursor.
+def test_existing_database_without_cursor_replays_missing_rows(sample):
+    existing = json.loads(line("203.0.113.1"))
+    sample.write_text(json.dumps(existing) + "\\n" + line("203.0.113.9"))
     with database.get_db() as conn:
         conn.execute(
-            """INSERT INTO access_logs (timestamp, ip, uri)
-               VALUES (?, ?, ?)""",
-            [datetime.now(timezone.utc).isoformat(), "203.0.113.1", "/"],
+            """INSERT INTO access_logs (timestamp, ip, uri, status)
+               VALUES (?, ?, ?, ?)""",
+            [existing["timestamp"], existing["remote_addr"], existing["uri"], existing["status"]],
         )
         conn.commit()
-    assert ingestion.ingest_file_once() == 0
-    assert row_count() == 1
-    with sample.open("a") as stream:
-        stream.write(line("203.0.113.9"))
     assert ingestion.ingest_file_once() == 1
     assert row_count() == 2
+    assert ingestion.ingest_file_once() == 0
+    with database.get_db() as conn:
+        rows = conn.execute("SELECT source_id, source_offset FROM access_logs ORDER BY id").fetchall()
+        assert all(row["source_id"] is not None for row in rows)
+
+
+def test_cursorless_legacy_same_signature_reconciles_one_row_each(sample):
+    existing = json.loads(line("203.0.113.1"))
+    raw = json.dumps(existing) + "\\n"
+    sample.write_text(raw * 2 + line("203.0.113.10"))
+    with database.get_db() as conn:
+        for _ in range(2):
+            conn.execute(
+                "INSERT INTO access_logs (timestamp, ip, uri, status) VALUES (?, ?, ?, ?)",
+                [existing["timestamp"], existing["remote_addr"], existing["uri"], existing["status"]],
+            )
+        conn.commit()
+    assert ingestion.ingest_file_once() == 1
+    assert row_count() == 3
+    assert ingestion.ingest_file_once() == 0
 
 
 def test_sse_frame_uses_real_newlines(sample):
