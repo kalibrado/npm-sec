@@ -110,3 +110,22 @@ def test_existing_database_without_cursor_starts_at_eof(sample):
         stream.write(line("203.0.113.9"))
     assert ingestion.ingest_file_once() == 1
     assert row_count() == 2
+
+
+def test_sse_frame_uses_real_newlines(sample):
+    sample.write_text(line("203.0.113.45", "/login", 401))
+    assert ingestion.ingest_file_once() == 1
+
+    async def first_frame():
+        stream = log_parser.sse_generator(since_id=0)
+        try:
+            return await anext(stream)
+        finally:
+            await stream.aclose()
+
+    frame = asyncio.run(first_frame())
+    assert frame.startswith("id: 1\ndata: ")
+    assert frame.endswith("\n\n")
+    assert r"\n" not in frame
+    event = json.loads(frame.split("\ndata: ", 1)[1].strip())
+    assert event["ip"] == "203.0.113.45"
