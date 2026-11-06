@@ -24,7 +24,7 @@ export function Overview() {
   return <>
     <p className="hint">Statistiques historiques des logs ingérés. Les règles enregistrées ne sont pas comptées comme des blocages effectifs.</p>
     <div className="metrics">{metrics.map(([label, value]) => <article className="metric" key={label}>
-      <span>{label}</span><strong>{value.toLocaleString("fr-FR")}</strong>
+      <span>{label}</span><strong>{typeof value === "number" ? value.toLocaleString("fr-FR") : value}</strong>
     </article>)}</div>
     <div className="rankings">
       <Ranking title="IP les plus refusées" items={stats.top_attackers.map(x => [x.ip, x.count])}/>
