@@ -12,6 +12,7 @@ import { HealthView } from "./features/health/HealthView";
 import { RulesView } from "./features/rules/RulesView";
 
 const sections = ["Accueil", "Logs", "Menaces", "Centre de contrôle", "Règles", "Carte", "Santé", "Configuration"] as const;
+const adminOnly = new Set<Section>(["Menaces", "Centre de contrôle", "Règles", "Santé", "Configuration"]);
 type Section = typeof sections[number];
 
 export function App() {
@@ -33,14 +34,14 @@ export function App() {
       <p className="session-user">{user.username} · {user.role}</p>
       <button className="logout-button" type="button" onClick={() => { void logout().then(() => { setUser(null); setSection("Accueil"); }).catch(err => setAuthError(String(err))); }}>Déconnexion</button>
       {authError && <p role="alert">{authError}</p>}
-      <nav aria-label="Navigation principale">{sections.map(item =>
+      <nav aria-label="Navigation principale">{sections.filter(item => user.role === "admin" || !adminOnly.has(item)).map(item =>
         <button key={item} type="button" aria-current={section === item ? "page" : undefined}
           onClick={() => setSection(item)}>{item}</button>)}</nav>
     </aside>
     <main id="content"><header><span>Nouvelle interface · Aperçu</span><strong>{section}</strong></header>
       <section className="panel" aria-labelledby="section-title">
         <h2 id="section-title">{section}</h2>
-        {section === "Accueil" ? <Overview /> : section === "Logs" ? <LogsView /> : section === "Menaces" ? <ThreatsView /> : section === "Centre de contrôle" ? <ControlView /> : section === "Configuration" ? <SettingsView /> : section === "Règles" ? <RulesView /> : section === "Carte" ? <GeoView /> : <HealthView />}
+        {user.role !== "admin" && adminOnly.has(section) ? <p>Accès réservé aux administrateurs.</p> : section === "Accueil" ? <Overview /> : section === "Logs" ? <LogsView /> : section === "Menaces" ? <ThreatsView /> : section === "Centre de contrôle" ? <ControlView /> : section === "Configuration" ? <SettingsView /> : section === "Règles" ? <RulesView /> : section === "Carte" ? <GeoView /> : <HealthView />}
         <a href="/">Retour au tableau de bord actuel</a>
       </section>
     </main>
