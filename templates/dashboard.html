@@ -608,7 +608,7 @@
 <!-- CONFIG PANEL -->
 <div class="main-panel config-panel" id="panel-config">
 <div class="toolbar lists-toolbar">
-<div class="side-title" style="padding:0">Configuration runtime</div>
+<div class="side-title" style="padding:0">Configuration de sécurité</div>
 <button class="page-btn" id="config-refresh">Rafraîchir</button>
 <button class="page-btn" id="simulate-autoban">Simuler auto-ban</button>
 </div>
@@ -616,8 +616,8 @@
 <section class="list-card nsd-profile-card" data-config-card="profile" aria-labelledby="nsd-profile-title">
   <div class="list-card-head">
     <div>
-      <div class="side-title" id="nsd-profile-title">Configuration de sécurité NSD · Éditeur principal</div>
-      <div class="list-subtitle">Paramètres hérités, éditables et versionnés. Enregistrement en brouillon, sans application automatique à NPM.</div>
+      <div class="side-title" id="nsd-profile-title">Protections Nginx</div>
+      <div class="list-subtitle">Gérez les protections depuis cet espace. Enregistrer et prévisualiser ne modifient pas Nginx.</div>
     </div>
     <span class="list-count" id="nsd-profile-version">Révision 0</span>
   </div>
@@ -646,6 +646,9 @@
     </div>
   </div>
 </section>
+<details class="config-advanced" id="config-advanced" aria-label="Outils avancés de configuration">
+<summary>Outils avancés et diagnostics <span>Historique technique, maintenance, simulations et statistiques détaillées</span></summary>
+<div class="config-advanced-content">
 <section class="list-card" id="typed-drafts-card" aria-labelledby="typed-drafts-title">
   <div class="list-card-head"><div>
     <div class="side-title" id="typed-drafts-title">Outils avancés : brouillons techniques</div>
@@ -842,6 +845,8 @@
 </div>
 <div class="tags-cloud" id="threat-tags-cloud"></div>
 </section>
+</div>
+</details>
 </div>
 </div>
 <!-- SIDEBAR -->
