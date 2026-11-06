@@ -34,6 +34,7 @@ jobs:
           DB_FILE: /tmp/npm-sec-ci.db
           LOG_FILE: /tmp/npm-sec-ci.log
         run: |
+          python scripts/check-frontend-size.py
           python -m compileall -q .
           node --test tests/typed_drafts_interactions.cjs
           node --check static/dashboard.js
