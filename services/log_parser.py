@@ -252,13 +252,13 @@ async def sse_generator(since_id: int | None = None):
                 event["threat_reasons"] = json.loads(event.get("threat_reasons") or "[]")
             except (TypeError, ValueError):
                 event["threat_reasons"] = []
-            yield f"id: {since_id}\\ndata: {json.dumps(event)}\\n\\n"
+            yield f"id: {since_id}\ndata: {json.dumps(event)}\n\n"
         if rows:
             idle_polls = 0
             await asyncio.sleep(0)
         else:
             idle_polls += 1
             if idle_polls >= 15:
-                yield ": keepalive\\n\\n"
+                yield ": keepalive\n\n"
                 idle_polls = 0
             await asyncio.sleep(1)
