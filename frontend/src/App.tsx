@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getJson } from "./services/api";
+import { LoginView } from "./features/auth/LoginView";
+import { logout, type AuthResponse, type User } from "./features/auth/authApi";
 import { Overview } from "./features/dashboard/Overview";
 import { LogsView } from "./features/logs/LogsView";
 import { ThreatsView } from "./features/threats/ThreatsView";
@@ -13,8 +16,23 @@ type Section = typeof sections[number];
 
 export function App() {
   const [section, setSection] = useState<Section>("Accueil");
+  const [user, setUser] = useState<User | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [authError, setAuthError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    getJson<AuthResponse>("/auth/me", controller.signal).then(result => setUser(result.user))
+      .catch(() => { if (!controller.signal.aborted) setUser(null); })
+      .finally(() => { if (!controller.signal.aborted) setChecking(false); });
+    return () => controller.abort();
+  }, []);
+  if (checking) return <main className="login-page"><p role="status">Vérification de la session…</p></main>;
+  if (!user) return <LoginView onLogin={setUser}/>;
   return <div className="shell">
     <aside className="sidebar"><h1>NSD <small>Security Dashboard</small></h1>
+      <p className="session-user">{user.username} · {user.role}</p>
+      <button className="logout-button" type="button" onClick={() => { void logout().then(() => { setUser(null); setSection("Accueil"); }).catch(err => setAuthError(String(err))); }}>Déconnexion</button>
+      {authError && <p role="alert">{authError}</p>}
       <nav aria-label="Navigation principale">{sections.map(item =>
         <button key={item} type="button" aria-current={section === item ? "page" : undefined}
           onClick={() => setSection(item)}>{item}</button>)}</nav>
