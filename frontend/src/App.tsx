@@ -4,6 +4,8 @@ import { LogsView } from "./features/logs/LogsView";
 import { ThreatsView } from "./features/threats/ThreatsView";
 import { ControlView } from "./features/control/ControlView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { GeoView } from "./features/map/GeoView";
+import { HealthView } from "./features/health/HealthView";
 
 const sections = ["Accueil", "Logs", "Menaces", "Centre de contrôle", "Carte", "Santé", "Configuration"] as const;
 type Section = typeof sections[number];
@@ -19,7 +21,7 @@ export function App() {
     <main id="content"><header><span>Nouvelle interface · Aperçu</span><strong>{section}</strong></header>
       <section className="panel" aria-labelledby="section-title">
         <h2 id="section-title">{section}</h2>
-        {section === "Accueil" ? <Overview /> : section === "Logs" ? <LogsView /> : section === "Menaces" ? <ThreatsView /> : section === "Centre de contrôle" ? <ControlView /> : section === "Configuration" ? <SettingsView /> : <p>Cette vue est en cours de migration. Les fonctions de production restent disponibles dans l’interface actuelle.</p>}
+        {section === "Accueil" ? <Overview /> : section === "Logs" ? <LogsView /> : section === "Menaces" ? <ThreatsView /> : section === "Centre de contrôle" ? <ControlView /> : section === "Configuration" ? <SettingsView /> : section === "Carte" ? <GeoView /> : <HealthView />}
         <a href="/">Retour au tableau de bord actuel</a>
       </section>
     </main>
