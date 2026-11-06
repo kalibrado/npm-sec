@@ -26,6 +26,11 @@ jobs:
           sudo apt-get install -y -qq nginx > /dev/null
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Build React preview
+        run: |
+          cd frontend
+          npm install --no-audit --no-fund
+          npm run build
       - name: Syntax and Python tests
         env:
           APP_ENV: development
