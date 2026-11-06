@@ -92,8 +92,12 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
                 legacy = conn.execute(
                     """SELECT id FROM access_logs
                        WHERE source_id IS NULL AND timestamp=? AND ip=?
-                         AND uri=? AND status=? LIMIT 1""",
-                    [event["timestamp"], event["ip"], event["uri"], event["status"]],
+                         AND uri=? AND status=?
+                         AND (host IS NULL OR host=? OR (host='' AND ?=''))
+                       ORDER BY CASE WHEN host=? THEN 0 ELSE 1 END, id
+                       LIMIT 1""",
+                    [event["timestamp"], event["ip"], event["uri"], event["status"],
+                     event["host"], event["host"], event["host"]],
                 ).fetchone()
                 if legacy:
                     conn.execute(
