@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getJson } from "../../services/api";
 import { SettingField } from "./SettingField";
 import { DeploymentView } from "./DeploymentView";
+import { RevisionHistory } from "./RevisionHistory";
 import type { Preview, Profile, SettingValue } from "./types";
 
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
@@ -67,6 +68,10 @@ export function SettingsView() {
         preview.changed_files.map(name => <details key={name}><summary>{name}</summary>
           <pre className="diff-view">{preview.diff[name] || "Aucun diff textuel."}</pre></details>)}
     </section>}
+    <RevisionHistory currentRevision={profile.revision} onRestored={async () => {
+      const refreshed = await getJson<Profile>("/security-profile");
+      setProfile(refreshed); setSettings(refreshed.settings); setPreview(null); setNote("");
+    }}/>
     <DeploymentView revision={profile.revision}/>
   </form>;
 }
