@@ -150,7 +150,7 @@ def test_sse_frame_uses_real_newlines(sample):
 def test_legacy_replay_does_not_claim_another_hosts_event(sample):
     existing = json.loads(line("203.0.113.1", "/login", 401))
     other = dict(existing, host="other.example.test")
-    sample.write_text(json.dumps(other) + "\\n")
+    sample.write_text(json.dumps(other) + "\n")
     with database.get_db() as conn:
         conn.execute(
             """INSERT INTO access_logs (timestamp, ip, uri, status, host)
