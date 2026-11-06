@@ -25,8 +25,8 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
 
     Invalid JSON lines are skipped. A partial final line is retried during the
     following poll. Changes of inode or file truncation trigger a new source
-    generation. On an initial upgrade with an existing database, start at EOF
-    rather than double-counting legacy rows that have no source cursor.
+    generation. On an initial upgrade, replay the file and reconcile legacy
+    rows by event identity rather than silently skipping the backlog.
     """
     log_file = Path(log_file or LOG_FILE)
     try:
@@ -44,8 +44,7 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
                 [path],
             ).fetchone()
             if state is None:
-                legacy_count = conn.execute("SELECT COUNT(*) FROM access_logs").fetchone()[0]
-                offset = file_size if legacy_count else 0
+                offset = 0
                 generation = 0
                 # Persist bootstrap immediately. A crash before the first batch
                 # must never cause the next startup to skip the remainder.
@@ -88,6 +87,22 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
                 continue
             event["source_id"] = source_id
             event["source_offset"] = position
+            # Reconcile rows imported before source cursors existed.
+            with get_db() as conn:
+                legacy = conn.execute(
+                    """SELECT id FROM access_logs
+                       WHERE source_id IS NULL AND timestamp=? AND ip=?
+                         AND uri=? AND status=? LIMIT 1""",
+                    [event["timestamp"], event["ip"], event["uri"], event["status"]],
+                ).fetchone()
+                if legacy:
+                    conn.execute(
+                        "UPDATE access_logs SET source_id=?, source_offset=? WHERE id=?",
+                        [source_id, position, legacy["id"]],
+                    )
+                    conn.commit()
+                    duplicates += 1
+                    continue
             result = insert_log(event)
             if result.get("duplicate"):
                 duplicates += 1
