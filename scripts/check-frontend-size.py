@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = (ROOT / "static", ROOT / "templates")
 EXTENSIONS = {".js", ".css", ".html"}
-LEGACY = {"static/dashboard.js", "static/dashboard.css", "templates/dashboard.html"}
+LEGACY = {"static/dashboard.js", "static/dashboard.css", "static/typed-drafts.js", "templates/dashboard.html"}
 
 
 def violations(limit=300, strict=False, root=ROOT):
