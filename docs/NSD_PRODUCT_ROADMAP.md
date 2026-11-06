@@ -234,3 +234,11 @@ Conserver l'existant tant qu'une refonte n'apporte pas de gain mesurable : **Fas
 
 - Correction du verrou `busy` : après restauration réussie, la vue libère le verrou avant `reload()` afin de recharger réellement le dernier brouillon et l'historique.
 - Garde de régression statique ajoutée ; test navigateur complet à prévoir.
+
+
+## Provenance du schéma de configuration (06/11/2026)
+
+- L'API authentifiée `GET /api/nginx-settings/schema` indique désormais si une révision initiale avec empreinte de source historique existe réellement, au lieu de renvoyer systématiquement `legacy_defaults_imported=false`.
+- Le brouillon courant et la révision initiale sont soumis à la vérification d'intégrité avant de retourner cet indicateur ; en cas de corruption, l'API refuse la réponse (409).
+- Ce statut atteste uniquement la présence de la provenance déclarée lors de l'import : il **ne certifie pas** la correspondance avec les fichiers `http_top.conf` et `server_proxy.conf`. Aucun déploiement ni reload.
+- Suite prioritaire : extraction/migration automatisée et vérifiable des valeurs historiques, sans saisie manuelle, puis extension du schéma et recette navigateur.
