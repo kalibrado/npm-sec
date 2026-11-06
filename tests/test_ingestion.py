@@ -124,8 +124,8 @@ def test_sse_frame_uses_real_newlines(sample):
             await stream.aclose()
 
     frame = asyncio.run(first_frame())
-    assert frame.startswith("id: 1\\ndata: ")
-    assert frame.endswith("\\n\\n")
-    assert "\\\\n" not in frame
-    event = json.loads(frame.split("\\ndata: ", 1)[1].strip())
+    assert frame.startswith("id: 1\ndata: ")
+    assert frame.endswith("\n\n")
+    assert "\\\n" not in frame
+    event = json.loads(frame.split("\ndata: ", 1)[1].strip())
     assert event["ip"] == "203.0.113.45"
