@@ -173,7 +173,7 @@ def test_legacy_replay_keeps_distinct_http_methods(sample):
     existing = json.loads(line("203.0.113.1", "/login", 401))
     existing["method"] = "POST"
     incoming = dict(existing, method="GET")
-    sample.write_text(json.dumps(incoming) + "\\n")
+    sample.write_text(json.dumps(incoming) + "\n")
     with database.get_db() as conn:
         conn.execute(
             """INSERT INTO access_logs (timestamp, ip, uri, status, host, method)
