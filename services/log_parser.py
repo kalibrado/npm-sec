@@ -57,7 +57,7 @@ def parse_line(line: str) -> dict | None:
             "latitude": float(data.get("latitude", 0) or 0),
             "longitude": float(data.get("longitude", 0) or 0),
             "request_time": float(data.get("request_time", 0) or 0),
-            "threat": classify_threat(data.get("uri"), data.get("http_user_agent")),
+            "threat": classify_threat(data.get("uri") or data.get("request_uri"), data.get("http_user_agent")),
         }
     except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
         return None
