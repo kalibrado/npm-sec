@@ -167,3 +167,28 @@ def test_legacy_replay_does_not_claim_another_hosts_event(sample):
         assert rows[0]["source_id"] is None
         assert rows[1]["host"] == "other.example.test"
         assert rows[1]["source_id"] is not None
+
+
+def test_legacy_replay_keeps_distinct_http_methods(sample):
+    existing = json.loads(line("203.0.113.1", "/login", 401))
+    existing["method"] = "POST"
+    incoming = dict(existing, method="GET")
+    sample.write_text(json.dumps(incoming) + "\n")
+    with database.get_db() as conn:
+        conn.execute(
+            """INSERT INTO access_logs (timestamp, ip, uri, status, host, method)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            [existing["timestamp"], existing["remote_addr"], existing["uri"],
+             existing["status"], existing["host"], existing["method"]],
+        )
+        conn.commit()
+    assert ingestion.ingest_file_once() == 1
+    assert row_count() == 2
+    with database.get_db() as conn:
+        rows = conn.execute(
+            "SELECT method, source_id FROM access_logs ORDER BY id"
+        ).fetchall()
+        assert rows[0]["method"] == "POST"
+        assert rows[0]["source_id"] is None
+        assert rows[1]["method"] == "GET"
+        assert rows[1]["source_id"] is not None
