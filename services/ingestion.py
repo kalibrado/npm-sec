@@ -94,10 +94,13 @@ def ingest_file_once(log_file: Path | None = None, batch_size: int = 500) -> int
                        WHERE source_id IS NULL AND timestamp=? AND ip=?
                          AND uri=? AND status=?
                          AND (host IS NULL OR host=? OR (host='' AND ?=''))
-                       ORDER BY CASE WHEN host=? THEN 0 ELSE 1 END, id
+                         AND (method IS NULL OR method='' OR method='-' OR method=?)
+                       ORDER BY CASE WHEN host=? THEN 0 ELSE 1 END,
+                                CASE WHEN method=? THEN 0 ELSE 1 END, id
                        LIMIT 1""",
                     [event["timestamp"], event["ip"], event["uri"], event["status"],
-                     event["host"], event["host"], event["host"]],
+                     event["host"], event["host"], event["method"],
+                     event["host"], event["method"]],
                 ).fetchone()
                 if legacy:
                     conn.execute(
