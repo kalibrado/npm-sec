@@ -5509,3 +5509,11 @@ body[data-view="config"] #panel-config [data-config-card="profile"] {
   border-radius: 6px; font: inherit;
 }
 .typed-import-attestation { padding: 10px; border: 1px solid var(--warning); border-radius: 6px; }
+
+/* Keep the everyday security editor focused; secondary tools remain accessible. */
+.config-advanced { border: 1px solid var(--border2); border-radius: 10px; min-width: 0; }
+.config-advanced > summary { cursor: pointer; padding: 14px 16px; font-weight: 650; }
+.config-advanced > summary span { display: block; margin-top: 4px; color: var(--muted); font-size: .85em; font-weight: 400; }
+.config-advanced[open] > summary { border-bottom: 1px solid var(--border2); }
+.config-advanced-content { display: grid; gap: 14px; padding: 12px; min-width: 0; }
+.config-advanced-content > .list-card { min-width: 0; }
